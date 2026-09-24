@@ -1,0 +1,2198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trackline — Asset Install Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+
+    --bg: #EDF0F2;
+    --surface: #FFFFFF;
+    --surface-2: #F4F6F7;
+    --border: #D7DDE2;
+    --text: #171B1F;
+    --text-dim: #5B6570;
+    --accent: #C97A00;
+    --accent-ink: #FFFFFF;
+    --accent-soft: #FCEBD1;
+    --good: #12876F;
+    --good-soft: #DEF3EE;
+    --bad: #C0242B;
+    --bad-soft: #FBE3E4;
+    --shadow: 0 1px 2px rgba(20,24,28,0.06), 0 6px 20px rgba(20,24,28,0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12161B;
+      --surface: #1B2129;
+      --surface-2: #212933;
+      --border: #2C3540;
+      --text: #EAEEF1;
+      --text-dim: #8B96A1;
+      --accent: #FFB020;
+      --accent-ink: #14181D;
+      --accent-soft: #3A2E10;
+      --good: #35C2A0;
+      --good-soft: #16302B;
+      --bad: #FF6B6B;
+      --bad-soft: #3A1518;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 10px 30px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12161B;
+    --surface: #1B2129;
+    --surface-2: #212933;
+    --border: #2C3540;
+    --text: #EAEEF1;
+    --text-dim: #8B96A1;
+    --accent: #FFB020;
+    --accent-ink: #14181D;
+    --accent-soft: #3A2E10;
+    --good: #35C2A0;
+    --good-soft: #16302B;
+    --bad: #FF6B6B;
+    --bad-soft: #3A1518;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 10px 30px rgba(0,0,0,0.35);
+  }
+
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); height: 100%; }
+  *, *::before, *::after { box-sizing: inherit; }
+  body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  body.no-scroll { overflow: hidden; }
+  button, input { font-family: inherit; color: inherit; }
+  button { cursor: pointer; }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+  #authScreen, #forcePasswordScreen, #projectsScreen, #dashboardScreen { max-width: 720px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; }
+  #authScreen[hidden], #forcePasswordScreen[hidden], #projectsScreen[hidden], #dashboardScreen[hidden] { display: none; }
+
+  /* ---------- Auth ---------- */
+  .auth-wrap { max-width: 360px; margin: 12vh auto 0; padding: 24px; display: flex; flex-direction: column; gap: 14px; width: 100%; }
+  .auth-brand { font-size: 26px; font-weight: 700; text-align: center; }
+  .auth-sub { font-size: 13px; color: var(--text-dim); text-align: center; margin-top: -8px; }
+  .auth-form { display: flex; flex-direction: column; gap: 12px; }
+  .auth-form input {
+    height: 44px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface);
+    padding: 0 12px; font-size: 15px; width: 100%;
+  }
+  .auth-error { font-size: 12.5px; color: var(--bad); background: var(--bad-soft); padding: 8px 10px; border-radius: 8px; }
+
+  /* ---------- Header ---------- */
+  header.topbar {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+    background: var(--bg);
+    padding: 18px 16px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .brand { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .brand-name-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .brand-name { font-size: 21px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 52vw; }
+  .project-id-sub { font-size: 10.5px; color: var(--text-dim); font-family: "IBM Plex Mono", monospace; margin-top: 1px; }
+  .brand-sub { font-size: 12.5px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
+  .mode-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--good); flex: none; }
+  .topbar-actions { display: flex; gap: 8px; align-items: center; }
+  .icon-btn {
+    width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface); display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .icon-btn:active { transform: scale(0.96); }
+
+  .stats-row {
+    display: flex; gap: 6px; overflow-x: auto; padding: 12px 2px 4px;
+    scrollbar-width: none;
+  }
+  .stats-row::-webkit-scrollbar { display: none; }
+  .stat {
+    flex: none; min-width: 68px; padding: 8px 10px; border-radius: 10px;
+    background: var(--surface); border: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .stat-n { font-family: "IBM Plex Mono", monospace; font-size: 16px; font-weight: 600; }
+  .stat-l { font-size: 10.5px; color: var(--text-dim); white-space: nowrap; }
+  .stat-good .stat-n { color: var(--good); }
+  .stat-total { border-color: var(--accent); }
+
+  .search-row { display: flex; gap: 8px; padding: 10px 16px 8px; }
+  .search-input {
+    flex: 1; height: 42px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface); padding: 0 14px; font-size: 15px; color: var(--text);
+  }
+  .search-input::placeholder { color: var(--text-dim); }
+  .search-input:focus-visible, input:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+
+  .filter-bar { display: flex; gap: 6px; overflow-x: auto; padding: 0 16px 14px; scrollbar-width: none; }
+  .filter-bar::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: none; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text-dim); font-size: 13px; white-space: nowrap;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+
+  .btn-accent, .btn-ghost, .btn-danger {
+    height: 40px; padding: 0 16px; border-radius: 10px; font-size: 14.5px; font-weight: 600;
+    border: 1px solid transparent;
+  }
+  .btn-accent { background: var(--accent); color: var(--accent-ink); }
+  .btn-accent:active { transform: scale(0.98); }
+  .btn-ghost { background: var(--surface); border-color: var(--border); color: var(--text); }
+  .btn-danger { background: var(--bad-soft); color: var(--bad); border-color: var(--bad-soft); width: 100%; }
+
+  /* ---------- List ---------- */
+  main { flex: 1; padding: 4px 16px 100px; }
+  #listEl { display: flex; flex-direction: column; gap: 8px; }
+  .row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--text-dim);
+    border-radius: 12px; padding: 12px 14px; text-align: left; width: 100%;
+  }
+  .row-complete { border-left-color: var(--good); }
+  .row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .row-id { font-family: "IBM Plex Mono", monospace; font-size: 13px; font-weight: 600; }
+  .row-label { font-size: 13.5px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46vw; }
+  .row-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
+  .dots { display: flex; gap: 3px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); }
+  .dot.done { background: var(--good); }
+  .row-status { font-size: 12px; color: var(--text-dim); font-weight: 600; }
+  .row-status.good { color: var(--good); }
+  .row-seals { font-size: 11px; color: var(--text-dim); }
+
+  .empty, .empty-sm, .empty-state { color: var(--text-dim); font-size: 14px; padding: 30px 8px; text-align: center; }
+  .empty-state { padding: 60px 20px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .empty-title { font-size: 17px; font-weight: 700; color: var(--text); }
+  .empty-sub { font-size: 13.5px; max-width: 320px; }
+  .empty-sm { padding: 14px 4px; font-size: 13px; }
+
+  /* ---------- Floating dock ---------- */
+  .dock {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 25;
+    padding: 10px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+    display: flex; gap: 10px; justify-content: center;
+    background: linear-gradient(to top, var(--bg) 60%, transparent);
+  }
+  .dock-inner { max-width: 720px; width: 100%; display: flex; gap: 10px; }
+  .dock .btn-ghost, .dock .btn-accent { flex: 1; box-shadow: var(--shadow); }
+  .dock[hidden] { display: none; }
+
+  /* ---------- Overlays ---------- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 50; background: rgba(10,12,14,0.55);
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .overlay[hidden] { display: none; }
+  .sheet {
+    width: 100%; max-width: 720px; max-height: 92vh; overflow-y: auto;
+    background: var(--bg); border-radius: 18px 18px 0 0; box-shadow: var(--shadow);
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+  .sheet-head {
+    position: sticky; top: 0; background: var(--bg); z-index: 2;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px 8px; border-bottom: 1px solid var(--border);
+  }
+  .sheet-head h2 { font-size: 15px; margin: 0; }
+  .close-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); font-size: 16px; }
+
+  .detail-head { padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+  .detail-id { font-family: "IBM Plex Mono", monospace; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+  .detail-field {
+    height: 42px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface);
+    padding: 0 12px; font-size: 14.5px; min-width: 0;
+  }
+  .detail-field-wide { grid-column: 1 / -1; }
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .detail-created { font-size: 12px; color: var(--text-dim); }
+
+  .detail-qr { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 8px 16px 20px; }
+  .qr-box {
+    width: 180px; height: 180px; border-radius: 12px; background: #fff; padding: 10px;
+    box-shadow: var(--shadow); display: flex; align-items: center; justify-content: center;
+  }
+  .qr-box img, .qr-box canvas, .qr-box table { display: block; max-width: 100%; max-height: 100%; }
+  .qr-fallback { font-size: 12px; color: #999; text-align: center; }
+
+  .detail-section { padding: 6px 16px 20px; border-top: 1px solid var(--border); }
+  .detail-section h3 { font-size: 13px; text-transform: none; margin: 14px 0 10px; color: var(--text-dim); font-weight: 600; }
+
+  .steps { display: flex; flex-direction: column; }
+  .step {
+    display: flex; align-items: center; gap: 12px; padding: 10px 4px; background: transparent;
+    border: none; border-bottom: 1px solid var(--border); text-align: left; width: 100%;
+  }
+  .step:last-child { border-bottom: none; }
+  .step-mark {
+    width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border); flex: none;
+    position: relative;
+  }
+  .step.done .step-mark { border-color: var(--good); background: var(--good); }
+  .step.done .step-mark::after {
+    content: ""; position: absolute; left: 6px; top: 2px; width: 5px; height: 10px;
+    border-right: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(45deg);
+  }
+  .step-body { display: flex; flex-direction: column; gap: 1px; }
+  .step-name { font-size: 14.5px; font-weight: 600; }
+  .step-time { font-size: 12px; color: var(--text-dim); }
+  .step.done .step-time { color: var(--good); }
+
+  .seal-actions { display: flex; gap: 8px; margin-bottom: 12px; }
+  .seals { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .seal-row {
+    display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px;
+  }
+  .seal-code { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; font-weight: 600; }
+  .seal-note {
+    border: none; background: var(--surface-2); border-radius: 6px; height: 30px; padding: 0 8px; font-size: 12.5px;
+    min-width: 0;
+  }
+  .seal-time { font-size: 10.5px; color: var(--text-dim); white-space: nowrap; }
+  .seal-remove { width: 24px; height: 24px; border-radius: 6px; border: none; background: var(--bad-soft); color: var(--bad); font-size: 14px; line-height: 1; }
+
+  .member-row {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; margin-bottom: 6px;
+  }
+  .member-main { flex: 1; min-width: 0; }
+  .member-name { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .member-sub { font-size: 11.5px; color: var(--text-dim); }
+  .role-select {
+    height: 30px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2);
+    font-size: 12px; padding: 0 4px;
+  }
+  .btn-sm { height: 30px; padding: 0 10px; font-size: 12.5px; }
+  #manageUsersBody h3 { font-size: 13px; color: var(--text-dim); margin: 14px 0 8px; }
+  #manageUsersBody h3:first-child { margin-top: 0; }
+
+  /* ---------- Scanner ---------- */
+  #scannerOverlay { align-items: stretch; }
+  .scan-sheet { width: 100%; max-width: 720px; margin: 0 auto; background: #0B0D10; color: #fff; min-height: 100%; display: flex; flex-direction: column; }
+  .scan-head { display: flex; align-items: center; justify-content: space-between; padding: calc(14px + env(safe-area-inset-top,0px)) 16px 10px; }
+  .scan-head h2 { font-size: 15px; margin: 0; }
+  #reader { width: 100%; flex: 1; background: #000; min-height: 320px; }
+  #reader video { width: 100% !important; object-fit: cover; }
+  .scan-foot { padding: 14px 16px calc(18px + env(safe-area-inset-bottom,0px)); display: flex; flex-direction: column; gap: 10px; }
+  .scan-hint { font-size: 12.5px; color: #9aa3ad; text-align: center; }
+  .manual-row { display: flex; gap: 8px; }
+  .manual-row input {
+    flex: 1; height: 42px; border-radius: 10px; border: 1px solid #333; background: #1a1d21; color: #fff; padding: 0 12px; font-size: 14.5px;
+  }
+
+  /* ---------- Confirm / prompt modals ---------- */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 60; background: rgba(10,12,14,0.55);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-overlay[hidden] { display: none; }
+  .modal-card {
+    width: 100%; max-width: 360px; background: var(--surface); border-radius: 14px; padding: 20px;
+    box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 14px;
+  }
+  .modal-card h3 { margin: 0; font-size: 16px; }
+  .modal-card p { margin: 0; font-size: 13.5px; color: var(--text-dim); white-space: pre-line; }
+  .modal-card input {
+    height: 42px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2);
+    padding: 0 12px; font-size: 14.5px; width: 100%;
+  }
+  .modal-actions { display: flex; gap: 8px; }
+  .modal-actions button { flex: 1; }
+  .modal-card.wide { max-width: 380px; }
+  .field-label { font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 4px; display: block; }
+  .field-group { display: flex; flex-direction: column; gap: 10px; }
+  .new-asset-qr-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 4px 0 2px; }
+  .qr-box-sm { width: 140px; height: 140px; }
+  .new-asset-qr-hint { font-size: 11.5px; color: var(--text-dim); text-align: center; }
+  .row-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+  .tag-pill {
+    font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent); white-space: nowrap;
+  }
+
+  .project-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px; text-align: left; width: 100%;
+  }
+  .project-row.unassigned { border-style: dashed; }
+  .project-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .project-name { font-size: 15px; font-weight: 700; }
+  .project-id { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--text-dim); }
+  .project-sub { font-size: 12.5px; color: var(--text-dim); margin-top: 2px; }
+  .project-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
+  .project-pct { font-family: "IBM Plex Mono", monospace; font-size: 16px; font-weight: 600; color: var(--text-dim); }
+  .project-pct.good { color: var(--good); }
+  .project-bar-track { width: 64px; height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
+  .project-bar-fill { height: 100%; background: var(--accent); }
+
+  /* ---------- Toast ---------- */
+  #toastEl {
+    position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom,0px)); transform: translate(-50%, 12px);
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-size: 13px;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s ease, transform 0.2s ease; z-index: 80;
+    max-width: 86vw; text-align: center;
+  }
+  #toastEl.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ EDIT ME: your Firebase project's web config ============ -->
+<script>
+  // Your web app's Firebase configuration
+  window.FIREBASE_CONFIG = {
+    apiKey: "AIzaSyD26xVGjv6A5vM24dLaJPKnanm-7spywaY",
+    authDomain: "trackline-prod.firebaseapp.com",
+    projectId: "trackline-prod",
+    storageBucket: "trackline-prod.firebasestorage.app",
+    messagingSenderId: "606354450329",
+    appId: "1:606354450329:web:abd3b5b1febe4eb013d508"
+  };
+</script>
+<!-- ======================================================================= -->
+
+<div id="authScreen">
+  <div class="auth-wrap">
+    <div class="auth-brand">Trackline</div>
+    <div class="auth-sub">Asset install tracker</div>
+    <form id="authForm" class="auth-form">
+      <div id="authNameRow" hidden>
+        <label class="field-label" for="authNameInput">Name</label>
+        <input id="authNameInput" type="text" autocomplete="name" placeholder="Your name">
+      </div>
+      <div>
+        <label class="field-label" for="authEmailInput">Email</label>
+        <input id="authEmailInput" type="email" autocomplete="email" required placeholder="you@company.com">
+      </div>
+      <div>
+        <label class="field-label" for="authPasswordInput">Password</label>
+        <input id="authPasswordInput" type="password" autocomplete="current-password" required placeholder="At least 6 characters">
+      </div>
+      <div id="authError" class="auth-error" hidden></div>
+      <button class="btn-accent" type="submit" id="authSubmitBtn">Sign in</button>
+    </form>
+    <button class="btn-ghost" id="authToggleBtn" type="button">Need an account? Create one</button>
+  </div>
+</div>
+
+<div id="forcePasswordScreen" hidden>
+  <div class="auth-wrap">
+    <div class="auth-brand">Set a new password</div>
+    <div class="auth-sub">Your password was reset — choose a new one to continue.</div>
+    <form id="forcePasswordForm" class="auth-form">
+      <div>
+        <label class="field-label" for="forceNewPasswordInput">New password</label>
+        <input id="forceNewPasswordInput" type="password" autocomplete="new-password" required placeholder="At least 6 characters">
+      </div>
+      <div>
+        <label class="field-label" for="forceConfirmPasswordInput">Confirm new password</label>
+        <input id="forceConfirmPasswordInput" type="password" autocomplete="new-password" required>
+      </div>
+      <div id="forcePasswordError" class="auth-error" hidden></div>
+      <button class="btn-accent" type="submit">Set password and continue</button>
+    </form>
+  </div>
+</div>
+
+<div id="projectsScreen" hidden>
+  <header class="topbar">
+    <div class="topbar-row">
+      <div class="brand">
+        <div class="brand-name">Trackline</div>
+        <div class="project-id-sub" id="myAccountLine"></div>
+        <div class="brand-sub"><span class="mode-dot" id="modeDotP"></span><span id="modeBadgeP">Starting…</span></div>
+      </div>
+      <div class="topbar-actions">
+        <button class="icon-btn" data-action="open-profile" aria-label="Edit profile" title="Edit profile">📱</button>
+        <button class="icon-btn" data-action="open-change-password" aria-label="Change password" title="Change password">🔑</button>
+        <button class="icon-btn" data-action="sign-out" aria-label="Sign out" title="Sign out">⎋</button>
+        <button class="icon-btn" id="themeBtnP" data-action="theme-toggle" aria-label="Toggle theme" title="Toggle theme">◐</button>
+      </div>
+    </div>
+  </header>
+  <main>
+    <div id="projectListEl"><div class="empty">Loading projects…</div></div>
+  </main>
+</div>
+
+<div id="dashboardScreen" hidden>
+  <header class="topbar">
+    <div class="topbar-row">
+      <div class="brand">
+        <div class="brand-name-row">
+          <button class="icon-btn" data-action="back-to-projects" aria-label="Back to projects" title="Back to projects">‹</button>
+          <div>
+            <div class="brand-name" id="projectNameHeading">Project</div>
+            <div class="project-id-sub" id="projectIdHeading"></div>
+          </div>
+        </div>
+        <div class="brand-sub"><span class="mode-dot" id="modeDot"></span><span id="modeBadge">Starting…</span><span id="myRoleBadge"></span></div>
+      </div>
+      <div class="topbar-actions">
+        <button class="icon-btn" data-action="open-manage-users" aria-label="Manage users" title="Manage users">👥</button>
+        <button class="icon-btn" data-action="rename-project" aria-label="Rename project" title="Rename project">✎</button>
+        <button class="icon-btn" data-action="delete-project" aria-label="Delete project" title="Delete project">🗑</button>
+        <button class="icon-btn" data-action="open-import" aria-label="Import assets" title="Import CSV">⬆</button>
+        <button class="icon-btn" data-action="export-csv" aria-label="Export CSV" title="Export CSV">⬇</button>
+        <button class="icon-btn" id="themeBtn" data-action="theme-toggle" aria-label="Toggle theme" title="Toggle theme">◐</button>
+      </div>
+    </div>
+    <div class="stats-row" id="statsEl"></div>
+    <div class="search-row">
+      <input class="search-input" id="searchInput" type="text" placeholder="Search by asset ID or label">
+    </div>
+    <div class="filter-bar" id="filterBar"></div>
+  </header>
+
+  <main>
+    <div id="listEl"></div>
+  </main>
+</div>
+
+<div class="dock" id="projectsDock" hidden>
+  <div class="dock-inner">
+    <button class="btn-accent" id="newProjectBtn" data-action="new-project">+ New project</button>
+  </div>
+</div>
+
+<div class="dock" id="dashboardDock" hidden>
+  <div class="dock-inner">
+    <button class="btn-ghost" data-action="new-asset">+ New asset</button>
+    <button class="btn-accent" data-action="scan-add">Scan QR</button>
+  </div>
+</div>
+
+<!-- Detail overlay -->
+<div class="overlay" id="detailOverlay" hidden>
+  <div class="sheet">
+    <div class="sheet-head">
+      <h2>Asset detail</h2>
+      <button class="close-btn" data-action="close-detail" aria-label="Close">✕</button>
+    </div>
+    <div id="detailBody"></div>
+  </div>
+</div>
+
+<!-- Scanner overlay -->
+<div class="overlay" id="scannerOverlay" hidden>
+  <div class="scan-sheet">
+    <div class="scan-head">
+      <h2 id="scanTitle">Scan code</h2>
+      <button class="close-btn" data-action="close-scanner" aria-label="Close" style="background:#1a1d21;border-color:#333;">✕</button>
+    </div>
+    <div id="reader"></div>
+    <div class="scan-foot">
+      <div class="scan-hint">Point the camera at a QR code or barcode. It scans automatically.</div>
+      <form class="manual-row" id="manualCodeForm">
+        <input id="manualCodeInput" type="text" placeholder="Or type the code here" autocomplete="off">
+        <button class="btn-accent" type="submit">Use</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm modal -->
+<div class="modal-overlay" id="confirmOverlay" hidden>
+  <div class="modal-card">
+    <h3 id="confirmTitle">Are you sure?</h3>
+    <p id="confirmMessage"></p>
+    <div class="modal-actions">
+      <button class="btn-ghost" data-action="confirm-no">Cancel</button>
+      <button class="btn-accent" id="confirmYesBtn" data-action="confirm-yes">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Prompt modal -->
+<div class="modal-overlay" id="promptOverlay" hidden>
+  <div class="modal-card">
+    <h3 id="promptTitle">Enter code</h3>
+    <form id="promptForm">
+      <input id="promptInput" type="text" autocomplete="off">
+      <div class="modal-actions" style="margin-top:14px;">
+        <button class="btn-ghost" type="button" data-action="prompt-cancel">Cancel</button>
+        <button class="btn-accent" type="submit" id="promptConfirmBtn">Add</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Import modal -->
+<div class="modal-overlay" id="importOverlay" hidden>
+  <div class="modal-card wide">
+    <h3>Import assets</h3>
+    <p>Upload a CSV to seed this project. Columns: <strong>Asset ID</strong> (required), Location, Level, OPTI#, Label. Existing asset IDs are updated with the new values; new IDs are created here.</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" type="button" data-action="download-template">Download template</button>
+      <button class="btn-accent" type="button" data-action="choose-import-file">Choose CSV file</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" type="button" data-action="close-import">Cancel</button>
+    </div>
+  </div>
+</div>
+<input type="file" id="importFileInput" accept=".csv,text/csv" hidden>
+
+<!-- New asset modal -->
+<div class="modal-overlay" id="newAssetOverlay" hidden>
+  <div class="modal-card wide">
+    <h3>New asset</h3>
+    <form id="newAssetForm">
+      <div class="field-group">
+        <div>
+          <label class="field-label" for="newAssetIdInput">Asset ID</label>
+          <input id="newAssetIdInput" type="text" autocomplete="off" placeholder="Custom ID, or leave the generated one">
+        </div>
+        <div class="field-grid">
+          <div>
+            <label class="field-label" for="newAssetLocationInput">Location</label>
+            <input id="newAssetLocationInput" type="text" autocomplete="off" placeholder="Location">
+          </div>
+          <div>
+            <label class="field-label" for="newAssetLevelInput">Level</label>
+            <input id="newAssetLevelInput" type="text" autocomplete="off" placeholder="Level">
+          </div>
+          <div>
+            <label class="field-label" for="newAssetOptiInput">OPTI #</label>
+            <input id="newAssetOptiInput" type="text" autocomplete="off" placeholder="OPTI #">
+          </div>
+        </div>
+        <div class="new-asset-qr-wrap">
+          <div class="qr-box qr-box-sm" id="newAssetQrCanvas"></div>
+          <div class="new-asset-qr-hint">QR preview — created with the asset, ready to print.</div>
+        </div>
+      </div>
+      <div class="modal-actions" style="margin-top:14px;">
+        <button class="btn-ghost" type="button" data-action="new-asset-cancel">Cancel</button>
+        <button class="btn-accent" type="submit">Create asset</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- New project modal -->
+<div class="modal-overlay" id="newProjectOverlay" hidden>
+  <div class="modal-card wide">
+    <h3>New project</h3>
+    <form id="newProjectForm">
+      <div class="field-group">
+        <div>
+          <label class="field-label" for="newProjectNameInput">Project name</label>
+          <input id="newProjectNameInput" type="text" autocomplete="off" placeholder="e.g. Riverside Substation Upgrade">
+        </div>
+        <div>
+          <label class="field-label" for="newProjectIdInput">Project ID</label>
+          <input id="newProjectIdInput" type="text" autocomplete="off" placeholder="Auto-generated from the name">
+        </div>
+      </div>
+      <div class="modal-actions" style="margin-top:14px;">
+        <button class="btn-ghost" type="button" data-action="new-project-cancel">Cancel</button>
+        <button class="btn-accent" type="submit">Create project</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Profile -->
+<div class="modal-overlay" id="profileOverlay" hidden>
+  <div class="modal-card">
+    <h3>Your profile</h3>
+    <form id="profileForm" class="auth-form">
+      <div>
+        <label class="field-label" for="profileNameInput">Name</label>
+        <input id="profileNameInput" type="text" autocomplete="name">
+      </div>
+      <div>
+        <label class="field-label" for="profilePhoneInput">Mobile number</label>
+        <input id="profilePhoneInput" type="tel" autocomplete="tel" placeholder="+15551234567">
+        <div class="project-id-sub" style="margin-top:4px;">Include the country code (e.g. +1 for the US). Used so Admins/Supervisors can text you a temporary password if yours is ever reset.</div>
+      </div>
+      <div id="profileError" class="auth-error" hidden></div>
+      <div class="modal-actions" style="margin-top:4px;">
+        <button class="btn-ghost" type="button" data-action="close-profile">Cancel</button>
+        <button class="btn-accent" type="submit">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Change password -->
+<div class="modal-overlay" id="changePasswordOverlay" hidden>
+  <div class="modal-card">
+    <h3>Change password</h3>
+    <form id="changePasswordForm" class="auth-form">
+      <div>
+        <label class="field-label" for="currentPasswordInput">Current password</label>
+        <input id="currentPasswordInput" type="password" autocomplete="current-password" required>
+      </div>
+      <div>
+        <label class="field-label" for="newPasswordInput">New password</label>
+        <input id="newPasswordInput" type="password" autocomplete="new-password" required placeholder="At least 6 characters">
+      </div>
+      <div>
+        <label class="field-label" for="confirmPasswordInput">Confirm new password</label>
+        <input id="confirmPasswordInput" type="password" autocomplete="new-password" required>
+      </div>
+      <div id="changePasswordError" class="auth-error" hidden></div>
+      <div class="modal-actions" style="margin-top:4px;">
+        <button class="btn-ghost" type="button" data-action="close-change-password">Cancel</button>
+        <button class="btn-accent" type="submit">Change password</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Temp password display -->
+<div class="modal-overlay" id="tempPasswordOverlay" hidden>
+  <div class="modal-card">
+    <h3>Password reset</h3>
+    <p id="tempPasswordIntro"></p>
+    <input id="tempPasswordValue" class="mono" type="text" readonly style="height:44px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);padding:0 12px;font-size:16px;text-align:center;">
+    <p style="font-size:12px;">They'll be asked to set their own new password the next time they sign in with this one.</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" type="button" data-action="copy-temp-password">Copy</button>
+      <button class="btn-accent" type="button" data-action="close-temp-password">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manage users -->
+<div class="overlay" id="manageUsersOverlay" hidden>
+  <div class="sheet">
+    <div class="sheet-head">
+      <h2 id="manageUsersTitle">Users</h2>
+      <button class="close-btn" data-action="close-manage-users" aria-label="Close">✕</button>
+    </div>
+    <div id="manageUsersBody" style="padding:16px;"></div>
+  </div>
+</div>
+
+<div id="toastEl"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.4/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-functions-compat.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  // ---------- Firebase ----------
+  firebase.initializeApp(window.FIREBASE_CONFIG);
+  var auth = firebase.auth();
+  var firestore = firebase.firestore();
+  var functions = firebase.functions();
+  try {
+    firestore.enablePersistence({ synchronizeTabs: true }).catch(function(e){
+      console.warn("Offline persistence unavailable:", e && e.code);
+    });
+  } catch (e) { console.warn(e); }
+  var projCol = firestore.collection("projects");
+  var membersCol = firestore.collection("members");
+  var requestsCol = firestore.collection("accessRequests");
+  var adminsCol = firestore.collection("admins");
+  var mustChangeCol = firestore.collection("mustChangePassword");
+  var usersCol = firestore.collection("users");
+  var disabledCol = firestore.collection("disabledAccounts");
+  function assetsColFor(pid){
+    var seg = pid === "" ? "_unassigned" : pid;
+    return firestore.collection("projects").doc(seg).collection("assets");
+  }
+
+  var STAGES = ["Installed", "Terminated", "EC FOD", "INT FOD", "L2's Complete", "FTE"];
+  var FILTERS = [
+    { key: "all", label: "All" },
+    { key: "not-started", label: "Not started" }
+  ].concat(STAGES.map(function(s){ return { key: s, label: "Next: " + s }; }))
+   .concat([{ key: "complete", label: "Complete" }]);
+
+  var assets = [];
+  var projects = [];
+  var loaded = false;
+  var projectsLoaded = false;
+  var initialScreenChosen = false;
+  var currentProjectId = null;
+  var detailId = null;
+  var filter = "all";
+  var search = "";
+  var scanCtx = null;
+  var qrInstance = null;
+  var confirmCallback = null;
+  var promptCallback = null;
+  var toastTimer = null;
+  var assetsUnsub = null;
+  var hasPendingWrites = false;
+
+  var myId = null;
+  var myName = "";
+  var isAdmin = false;
+  var rolesByProject = {};
+  var accessReady = false;
+  var myMemberships = [];
+  var myRequests = [];
+  var manageUsersMembers = [];
+  var manageUsersRequests = [];
+  var manageUsersDisabled = {};
+  var manageUsersUnsub1 = null;
+  var manageUsersUnsub2 = null;
+  var manageUsersUnsub3 = null;
+  var accessUnsubs = [];
+
+  // ---------- utils ----------
+  function escapeHtml(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function sanitizeId(raw){
+    if (!raw) return "";
+    var s = String(raw).trim().replace(/[^A-Za-z0-9_\-.~:@+]/g, "-");
+    s = s.replace(/-{2,}/g, "-").replace(/^-+|-+$/g, "");
+    return s.slice(0, 180);
+  }
+  function genId(){
+    var ts = Date.now().toString(36).toUpperCase();
+    var rnd = Math.random().toString(36).slice(2, 6).toUpperCase();
+    return "AST-" + ts + "-" + rnd;
+  }
+  function genProjectId(){
+    var ts = Date.now().toString(36).toUpperCase();
+    var rnd = Math.random().toString(36).slice(2, 6).toUpperCase();
+    return "PRJ-" + ts + "-" + rnd;
+  }
+  function formatDate(ts){
+    if (!ts) return "";
+    var d = new Date(ts);
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  }
+  function formatTime(ts){
+    if (!ts) return "";
+    var d = new Date(ts);
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " · " +
+      d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  }
+  function cloneAsset(a){ return JSON.parse(JSON.stringify(a)); }
+  function cloneProject(p){ return JSON.parse(JSON.stringify(p)); }
+  function fieldInputHtml(asset, field, placeholder, cls){
+    return '<input class="' + (cls || "detail-field") + '" type="text" placeholder="' + escapeHtml(placeholder) +
+      '" value="' + escapeHtml(asset[field] || "") + '" data-action="edit-field" data-field="' + field +
+      '" data-id="' + escapeHtml(asset.id) + '">';
+  }
+  function drawQr(containerEl, text){
+    if (!containerEl) return;
+    containerEl.innerHTML = "";
+    if (typeof QRCode === "undefined" || !text){
+      containerEl.innerHTML = '<div class="qr-fallback">QR unavailable —<br>check your connection</div>';
+      return;
+    }
+    try {
+      new QRCode(containerEl, {
+        text: text,
+        width: containerEl.classList.contains("qr-box-sm") ? 140 : 180,
+        height: containerEl.classList.contains("qr-box-sm") ? 140 : 180,
+        colorDark: "#14181D",
+        colorLight: "#FFFFFF",
+        correctLevel: QRCode.CorrectLevel.H
+      });
+    } catch (e){
+      console.error(e);
+      containerEl.innerHTML = '<div class="qr-fallback">QR unavailable —<br>check your connection</div>';
+    }
+  }
+  function toast(msg){
+    var el = document.getElementById("toastEl");
+    el.textContent = msg;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ el.classList.remove("show"); }, 3200);
+  }
+  function csvEscape(v){
+    v = String(v == null ? "" : v);
+    return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }
+  function browserDownload(filename, data, mime){
+    var blob = (data instanceof Blob) ? data : new Blob([data], { type: mime || "text/plain" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
+  }
+
+  // ---------- normalize ----------
+  function normalize(data, id){
+    data = data || {};
+    var stages = STAGES.map(function(name){
+      var found = null;
+      (data.stages || []).forEach(function(s){ if (s && s.name === name) found = s; });
+      return { name: name, done: !!(found && found.done), at: found ? (found.at || null) : null };
+    });
+    return {
+      id: id,
+      code: data.code || id,
+      label: data.label || "",
+      projectId: data.projectId || "",
+      location: data.location || "",
+      level: data.level || "",
+      optiNum: data.optiNum || "",
+      createdAt: data.createdAt || Date.now(),
+      stages: stages,
+      seals: Array.isArray(data.seals) ? data.seals : []
+    };
+  }
+  function normalizeProject(data, id){
+    data = data || {};
+    return { id: id, name: data.name || id, createdAt: data.createdAt || Date.now() };
+  }
+
+  // ---------- auth ----------
+  var authMode = "signin";
+  function showAuthScreen(){
+    document.getElementById("authScreen").hidden = false;
+    document.getElementById("forcePasswordScreen").hidden = true;
+    document.getElementById("projectsScreen").hidden = true;
+    document.getElementById("dashboardScreen").hidden = true;
+    document.getElementById("projectsDock").hidden = true;
+    document.getElementById("dashboardDock").hidden = true;
+  }
+  var forcePasswordPending = false;
+  function showForcePasswordScreen(){
+    forcePasswordPending = true;
+    document.getElementById("authScreen").hidden = true;
+    document.getElementById("forcePasswordScreen").hidden = false;
+    document.getElementById("projectsScreen").hidden = true;
+    document.getElementById("dashboardScreen").hidden = true;
+    document.getElementById("projectsDock").hidden = true;
+    document.getElementById("dashboardDock").hidden = true;
+  }
+  function hideForcePasswordScreen(){
+    var wasPending = forcePasswordPending;
+    forcePasswordPending = false;
+    document.getElementById("forcePasswordScreen").hidden = true;
+    if (wasPending){ initialScreenChosen = false; onDataChanged(); }
+  }
+  function updateAuthUi(){
+    document.getElementById("authNameRow").hidden = authMode !== "signup";
+    document.getElementById("authSubmitBtn").textContent = authMode === "signup" ? "Create account" : "Sign in";
+    document.getElementById("authToggleBtn").textContent = authMode === "signup" ? "Already have an account? Sign in" : "Need an account? Create one";
+    document.getElementById("authPasswordInput").autocomplete = authMode === "signup" ? "new-password" : "current-password";
+    document.getElementById("authError").hidden = true;
+  }
+  var myPhone = "";
+  function openProfileModal(){
+    if (!myId){ toast("Sign in first."); return; }
+    document.getElementById("profileNameInput").value = myName || "";
+    document.getElementById("profilePhoneInput").value = myPhone || "";
+    document.getElementById("profileError").hidden = true;
+    document.getElementById("profileOverlay").hidden = false;
+    setTimeout(function(){ document.getElementById("profileNameInput").focus(); }, 60);
+  }
+  function closeProfileModal(){
+    document.getElementById("profileOverlay").hidden = true;
+  }
+  function submitProfile(){
+    var errEl = document.getElementById("profileError");
+    errEl.hidden = true;
+    var name = document.getElementById("profileNameInput").value.trim();
+    var phone = document.getElementById("profilePhoneInput").value.trim();
+    if (!name){ errEl.textContent = "Name can't be empty."; errEl.hidden = false; return; }
+    if (phone && !/^\+[1-9]\d{6,14}$/.test(phone)){
+      errEl.textContent = "Enter the mobile number with a country code, e.g. +15551234567 — or leave it blank.";
+      errEl.hidden = false;
+      return;
+    }
+    var user = auth.currentUser;
+    if (!user){ errEl.textContent = "You're not signed in."; errEl.hidden = false; return; }
+    Promise.resolve(name !== myName ? user.updateProfile({ displayName: name }) : null).then(function(){
+      return usersCol.doc(myId).set({ name: name, phone: phone }, { merge: true });
+    }).then(function(){
+      myName = name;
+      myPhone = phone;
+      var accEl = document.getElementById("myAccountLine");
+      if (accEl) accEl.textContent = "Signed in as " + myName;
+      closeProfileModal();
+      toast("Profile saved.");
+    }).catch(function(err){
+      errEl.textContent = err.message;
+      errEl.hidden = false;
+    });
+  }
+  function openChangePasswordModal(){
+    if (!myId){ toast("Sign in first."); return; }
+    document.getElementById("currentPasswordInput").value = "";
+    document.getElementById("newPasswordInput").value = "";
+    document.getElementById("confirmPasswordInput").value = "";
+    document.getElementById("changePasswordError").hidden = true;
+    document.getElementById("changePasswordOverlay").hidden = false;
+    setTimeout(function(){ document.getElementById("currentPasswordInput").focus(); }, 60);
+  }
+  function closeChangePasswordModal(){
+    document.getElementById("changePasswordOverlay").hidden = true;
+  }
+  function submitChangePassword(){
+    var errEl = document.getElementById("changePasswordError");
+    errEl.hidden = true;
+    var user = auth.currentUser;
+    var currentPw = document.getElementById("currentPasswordInput").value;
+    var newPw = document.getElementById("newPasswordInput").value;
+    var confirmPw = document.getElementById("confirmPasswordInput").value;
+    if (!user || !user.email){ errEl.textContent = "You're not signed in."; errEl.hidden = false; return; }
+    if (newPw.length < 6){ errEl.textContent = "New password must be at least 6 characters."; errEl.hidden = false; return; }
+    if (newPw !== confirmPw){ errEl.textContent = "New passwords don't match."; errEl.hidden = false; return; }
+    var cred = firebase.auth.EmailAuthProvider.credential(user.email, currentPw);
+    user.reauthenticateWithCredential(cred).then(function(){
+      return user.updatePassword(newPw);
+    }).then(function(){
+      closeChangePasswordModal();
+      toast("Password updated.");
+    }).catch(function(err){
+      errEl.textContent = err.code === "auth/wrong-password" ? "Current password is incorrect." : err.message;
+      errEl.hidden = false;
+    });
+  }
+  function teardownAccessSubscriptions(){
+    accessUnsubs.forEach(function(u){ try { u(); } catch (e) {} });
+    accessUnsubs = [];
+    if (assetsUnsub){ assetsUnsub(); assetsUnsub = null; }
+  }
+  auth.onAuthStateChanged(function(user){
+    teardownAccessSubscriptions();
+    if (!user){
+      myId = null; myName = ""; myPhone = ""; isAdmin = false; rolesByProject = {};
+      accessReady = false; initialScreenChosen = false; loaded = false; projectsLoaded = false;
+      forcePasswordPending = false;
+      showAuthScreen();
+      return;
+    }
+    myId = user.uid;
+    myName = user.displayName || (user.email || "").split("@")[0] || "Unnamed";
+    document.getElementById("authScreen").hidden = true;
+    var accEl = document.getElementById("myAccountLine");
+    if (accEl) accEl.textContent = "Signed in as " + myName;
+    subscribeAccess();
+  });
+  function subscribeAccess(){
+    accessUnsubs.push(mustChangeCol.doc(myId).onSnapshot(function(doc){
+      if (doc.exists) showForcePasswordScreen();
+      else hideForcePasswordScreen();
+    }, function(err){ console.error(err); }));
+    accessUnsubs.push(disabledCol.doc(myId).onSnapshot(function(doc){
+      if (doc.exists){
+        toast("Your account has been disabled.");
+        auth.signOut();
+      }
+    }, function(err){ console.error(err); }));
+    accessUnsubs.push(usersCol.doc(myId).onSnapshot(function(doc){
+      myPhone = doc.exists ? (doc.data().phone || "") : "";
+    }, function(err){ console.error(err); }));
+    accessUnsubs.push(adminsCol.doc(myId).onSnapshot(function(doc){
+      isAdmin = doc.exists;
+      accessReady = true;
+      onDataChanged();
+    }, function(err){ console.error(err); accessReady = true; onDataChanged(); }));
+    accessUnsubs.push(membersCol.where("userId", "==", myId).onSnapshot(function(snap){
+      myMemberships = snap.docs.map(function(d){ return d.data(); });
+      rolesByProject = {};
+      myMemberships.forEach(function(m){ if (m.projectId) rolesByProject[m.projectId] = m.role; });
+      if (currentProjectId === null) renderProjectList(); else refreshView();
+    }, function(err){ console.error(err); }));
+    accessUnsubs.push(requestsCol.where("userId", "==", myId).onSnapshot(function(snap){
+      myRequests = snap.docs.map(function(d){ var v = d.data(); v.id = d.id; return v; });
+      if (currentProjectId === null) renderProjectList();
+    }, function(err){ console.error(err); }));
+    accessUnsubs.push(projCol.orderBy("createdAt", "desc").limit(200).onSnapshot(function(snap){
+      projects = snap.docs.map(function(d){ return normalizeProject(d.data(), d.id); });
+      projectsLoaded = true;
+      onDataChanged();
+    }, function(err){ console.error(err); }));
+  }
+
+  // ---------- storage ----------
+  function updateModeBadge(){
+    var text = hasPendingWrites ? "Syncing changes…" : "Synced";
+    var color = hasPendingWrites ? "var(--accent)" : "var(--good)";
+    [["modeBadge", "modeDot"], ["modeBadgeP", "modeDotP"]].forEach(function(pair){
+      var elB = document.getElementById(pair[0]);
+      var elD = document.getElementById(pair[1]);
+      if (elB) elB.textContent = text;
+      if (elD) elD.style.background = color;
+    });
+  }
+  function onDataChanged(){
+    if (forcePasswordPending) return;
+    if (!accessReady) return;
+    if (!initialScreenChosen && projectsLoaded){
+      initialScreenChosen = true;
+      chooseInitialScreen();
+      return;
+    }
+    if (initialScreenChosen) refreshView();
+  }
+  function chooseInitialScreen(){
+    var last = null;
+    try { last = localStorage.getItem("trackline_last_project"); } catch (e) {}
+    if (last !== null && canOpenProject(last)) showDashboard(last);
+    else showProjects();
+  }
+  function refreshView(){
+    if (currentProjectId === null){
+      refreshProjectStats();
+    } else {
+      updateDashboardHeader();
+      renderList();
+      renderStats();
+      if (detailId) renderDetail();
+    }
+  }
+  function upsertLocalCache(asset){
+    var idx = -1;
+    assets.forEach(function(a, i){ if (a.id === asset.id) idx = i; });
+    if (idx >= 0) assets[idx] = asset; else assets.unshift(asset);
+    assets.sort(function(a, b){ return b.createdAt - a.createdAt; });
+  }
+  function writeAsset(asset){
+    upsertLocalCache(asset);
+    refreshView();
+    assetsColFor(asset.projectId || "").doc(asset.id).set(asset).catch(function(e){ console.error(e); toast("Couldn't save — " + e.message); });
+  }
+  function deleteAssetStore(id){
+    var pid = currentProjectId;
+    assets = assets.filter(function(a){ return a.id !== id; });
+    refreshView();
+    assetsColFor(pid).doc(id).delete().catch(function(e){ console.error(e); toast("Couldn't delete — " + e.message); });
+  }
+  function upsertProjectCache(p){
+    var idx = -1;
+    projects.forEach(function(x, i){ if (x.id === p.id) idx = i; });
+    if (idx >= 0) projects[idx] = p; else projects.unshift(p);
+  }
+  function writeProject(p){
+    upsertProjectCache(p);
+    refreshView();
+    projCol.doc(p.id).set(p).catch(function(e){ console.error(e); toast("Couldn't save — " + e.message); });
+  }
+  function deleteProjectStore(id){
+    projects = projects.filter(function(p){ return p.id !== id; });
+    refreshView();
+    projCol.doc(id).delete().catch(function(e){ console.error(e); toast("Couldn't delete — " + e.message); });
+  }
+  function subscribeProjectAssets(pid){
+    if (assetsUnsub){ assetsUnsub(); assetsUnsub = null; }
+    loaded = false;
+    assetsUnsub = assetsColFor(pid).orderBy("createdAt", "desc").limit(1000).onSnapshot(function(snap){
+      assets = snap.docs.map(function(d){ return normalize(d.data(), d.id); });
+      hasPendingWrites = !!(snap.metadata && snap.metadata.hasPendingWrites);
+      updateModeBadge();
+      loaded = true;
+      refreshView();
+    }, function(err){
+      console.error(err);
+      toast("Couldn't load this project's assets.");
+    });
+  }
+
+  // ---------- CRUD ----------
+  function createAsset(idInput, fields){
+    if (!canCreateAssets(currentProjectId)){ toast("You don't have permission to add assets here."); return null; }
+    fields = fields || {};
+    var id = sanitizeId(idInput) || genId();
+    var exists = false;
+    assets.forEach(function(a){ if (a.id === id) exists = true; });
+    if (exists){ toast("That asset ID is already in use — try another."); return null; }
+    var asset = {
+      id: id,
+      code: idInput || id,
+      label: fields.label || "",
+      projectId: currentProjectId || "",
+      location: fields.location || "",
+      level: fields.level || "",
+      optiNum: fields.optiNum || "",
+      createdAt: Date.now(),
+      stages: STAGES.map(function(name){ return { name: name, done: false, at: null }; }),
+      seals: []
+    };
+    writeAsset(asset);
+    return asset;
+  }
+  function updateAssetField(assetId, field, value){
+    if (!canEditAssets(currentProjectId)) return;
+    var asset = findAsset(assetId);
+    if (!asset) return;
+    var clone = cloneAsset(asset);
+    clone[field] = value;
+    writeAsset(clone);
+  }
+  function findAsset(id){
+    var found = null;
+    assets.forEach(function(a){ if (a.id === id) found = a; });
+    return found;
+  }
+  function toggleStage(assetId, stageName){
+    if (!canEditAssets(currentProjectId)) return;
+    var asset = findAsset(assetId);
+    if (!asset) return;
+    var clone = cloneAsset(asset);
+    clone.stages.forEach(function(s){
+      if (s.name === stageName){ s.done = !s.done; s.at = s.done ? Date.now() : null; }
+    });
+    writeAsset(clone);
+  }
+  function addSeal(assetId, code){
+    if (!canEditAssets(currentProjectId)) return;
+    var asset = findAsset(assetId);
+    if (!asset || !code) return;
+    var clone = cloneAsset(asset);
+    clone.seals.push({ code: code, note: "", at: Date.now() });
+    writeAsset(clone);
+    toast("Tamper seal logged.");
+  }
+  function updateSealNote(assetId, idx, note){
+    if (!canEditAssets(currentProjectId)) return;
+    var asset = findAsset(assetId);
+    if (!asset) return;
+    var clone = cloneAsset(asset);
+    if (clone.seals[idx]) clone.seals[idx].note = note;
+    writeAsset(clone);
+  }
+  function removeSeal(assetId, idx){
+    if (!canEditAssets(currentProjectId)) return;
+    var asset = findAsset(assetId);
+    if (!asset) return;
+    var clone = cloneAsset(asset);
+    clone.seals.splice(idx, 1);
+    writeAsset(clone);
+  }
+  var newAssetSuggestion = "";
+  function openNewAssetModal(){
+    if (!canCreateAssets(currentProjectId)){ toast("You don't have permission to add assets here."); return; }
+    newAssetSuggestion = genId();
+    var idInput = document.getElementById("newAssetIdInput");
+    idInput.value = newAssetSuggestion;
+    document.getElementById("newAssetLocationInput").value = "";
+    document.getElementById("newAssetLevelInput").value = "";
+    document.getElementById("newAssetOptiInput").value = "";
+    document.getElementById("newAssetOverlay").hidden = false;
+    drawNewAssetQrPreview();
+    setTimeout(function(){ idInput.focus(); idInput.select(); }, 60);
+  }
+  function closeNewAssetModal(){
+    document.getElementById("newAssetOverlay").hidden = true;
+  }
+  function drawNewAssetQrPreview(){
+    var idInput = document.getElementById("newAssetIdInput");
+    var val = sanitizeId(idInput.value) || newAssetSuggestion;
+    drawQr(document.getElementById("newAssetQrCanvas"), val);
+  }
+  function submitNewAsset(){
+    var idInput = document.getElementById("newAssetIdInput");
+    var idVal = idInput.value.trim() || newAssetSuggestion;
+    var fields = {
+      location: document.getElementById("newAssetLocationInput").value.trim(),
+      level: document.getElementById("newAssetLevelInput").value.trim(),
+      optiNum: document.getElementById("newAssetOptiInput").value.trim()
+    };
+    var a = createAsset(idVal, fields);
+    if (a){ closeNewAssetModal(); openDetail(a.id); }
+  }
+
+  // ---------- derived ----------
+  function nextStage(asset){
+    var next = null;
+    asset.stages.some(function(s){ if (!s.done){ next = s.name; return true; } return false; });
+    return next;
+  }
+  function matchesFilter(asset){
+    if (filter === "all") return true;
+    if (filter === "complete") return nextStage(asset) === null;
+    if (filter === "not-started") return asset.stages.every(function(s){ return !s.done; });
+    return nextStage(asset) === filter;
+  }
+  function matchesSearch(asset){
+    if (!search) return true;
+    var q = search.toLowerCase();
+    return asset.id.toLowerCase().indexOf(q) >= 0 ||
+      (asset.label || "").toLowerCase().indexOf(q) >= 0 ||
+      (asset.code || "").toLowerCase().indexOf(q) >= 0 ||
+      (asset.location || "").toLowerCase().indexOf(q) >= 0 ||
+      (asset.level || "").toLowerCase().indexOf(q) >= 0 ||
+      (asset.optiNum || "").toLowerCase().indexOf(q) >= 0;
+  }
+  function projectAssets(){ return assets; }
+
+  // ---------- access (roles) ----------
+  function myRoleInProject(pid){
+    if (isAdmin) return "Admin";
+    return rolesByProject[pid] || null;
+  }
+  function canOpenProject(pid){ return isAdmin || !!rolesByProject[pid]; }
+  function canCreateAssets(pid){ var r = myRoleInProject(pid); return r === "Admin" || r === "Supervisor"; }
+  function canDeleteAssets(pid){ var r = myRoleInProject(pid); return r === "Admin" || r === "Supervisor"; }
+  function canEditAssets(pid){ return myRoleInProject(pid) !== null; }
+  function canManageUsers(pid){ var r = myRoleInProject(pid); return r === "Admin" || r === "Supervisor"; }
+  function canManageProject(pid){ return myRoleInProject(pid) === "Admin"; }
+  function visibleProjects(){
+    var list = projects.slice().sort(function(a, b){ return (a.name || "").localeCompare(b.name || ""); });
+    if (isAdmin) return list.concat([{ id: "", name: "Unassigned", special: true }]);
+    return list.filter(function(p){ return !!rolesByProject[p.id]; });
+  }
+  function requestAccess(pid){
+    if (!myId){ toast("Can't identify your account here."); return; }
+    var already = false;
+    myRequests.forEach(function(r){ if (r.projectId === pid) already = true; });
+    if (already){ toast("Request already sent."); return; }
+    requestsCol.doc(pid + "_" + myId).set({ projectId: pid, userId: myId, userName: myName || "Unnamed", requestedAt: Date.now() })
+      .then(function(){ toast("Request sent."); })
+      .catch(function(e){ console.error(e); toast("Couldn't send the request — " + e.message); });
+  }
+
+  // ---------- projects ----------
+  function showProjects(){
+    if (assetsUnsub){ assetsUnsub(); assetsUnsub = null; }
+    currentProjectId = null;
+    detailId = null;
+    document.getElementById("projectsScreen").hidden = false;
+    document.getElementById("dashboardScreen").hidden = true;
+    document.getElementById("projectsDock").hidden = false;
+    document.getElementById("dashboardDock").hidden = true;
+    document.getElementById("newProjectBtn").style.display = isAdmin ? "" : "none";
+    try { localStorage.removeItem("trackline_last_project"); } catch (e) {}
+    refreshView();
+  }
+  function showDashboard(id){
+    if (!accessReady) return;
+    if (!canOpenProject(id)){
+      toast("You don't have access to that project.");
+      showProjects();
+      return;
+    }
+    currentProjectId = id;
+    filter = "all";
+    search = "";
+    var s = document.getElementById("searchInput");
+    if (s) s.value = "";
+    document.getElementById("projectsScreen").hidden = true;
+    document.getElementById("dashboardScreen").hidden = false;
+    document.getElementById("projectsDock").hidden = true;
+    document.getElementById("dashboardDock").hidden = false;
+    try { localStorage.setItem("trackline_last_project", id); } catch (e) {}
+    renderFilters();
+    subscribeProjectAssets(id);
+    refreshView();
+  }
+  function updateDashboardHeader(){
+    var nameEl = document.getElementById("projectNameHeading");
+    var idEl = document.getElementById("projectIdHeading");
+    var roleEl = document.getElementById("myRoleBadge");
+    if (nameEl) nameEl.textContent = currentProjectName();
+    if (idEl) idEl.textContent = currentProjectId === "" ? "" : currentProjectId;
+    var role = myRoleInProject(currentProjectId);
+    if (roleEl) roleEl.textContent = role ? " · " + role : "";
+    var canManageProj = canManageProject(currentProjectId);
+    var canManageU = canManageUsers(currentProjectId);
+    var canCreate = canCreateAssets(currentProjectId);
+    var renameBtn = document.querySelector('[data-action="rename-project"]');
+    var deleteBtn = document.querySelector('[data-action="delete-project"]');
+    var usersBtn = document.querySelector('[data-action="open-manage-users"]');
+    var importBtn = document.querySelector('[data-action="open-import"]');
+    var newAssetBtn = document.querySelector('#dashboardDock [data-action="new-asset"]');
+    if (renameBtn) renameBtn.style.display = canManageProj ? "" : "none";
+    if (deleteBtn) deleteBtn.style.display = canManageProj ? "" : "none";
+    if (usersBtn) usersBtn.style.display = canManageU ? "" : "none";
+    if (importBtn) importBtn.style.display = canCreate ? "" : "none";
+    if (newAssetBtn) newAssetBtn.style.display = canCreate ? "" : "none";
+  }
+  var projectIdTouched = false;
+  function openNewProjectModal(){
+    if (!isAdmin){ toast("Only Admins can create projects."); return; }
+    projectIdTouched = false;
+    document.getElementById("newProjectNameInput").value = "";
+    document.getElementById("newProjectIdInput").value = "";
+    document.getElementById("newProjectOverlay").hidden = false;
+    setTimeout(function(){ document.getElementById("newProjectNameInput").focus(); }, 60);
+  }
+  function closeNewProjectModal(){
+    document.getElementById("newProjectOverlay").hidden = true;
+  }
+  function submitNewProject(){
+    var nameInput = document.getElementById("newProjectNameInput");
+    var idInput = document.getElementById("newProjectIdInput");
+    var name = nameInput.value.trim();
+    if (!name){ toast("Give the project a name."); return; }
+    var id = sanitizeId(idInput.value) || sanitizeId(name) || genProjectId();
+    var dup = false;
+    projects.forEach(function(p){ if (p.id === id) dup = true; });
+    if (dup){ toast("A project with that ID already exists."); return; }
+    writeProject({ id: id, name: name, createdAt: Date.now() });
+    closeNewProjectModal();
+    showDashboard(id);
+  }
+  function renameCurrentProject(){
+    if (!canManageProject(currentProjectId)) return;
+    showPrompt({
+      title: "Rename project",
+      placeholder: currentProjectName(),
+      confirmText: "Save",
+      onConfirm: function(val){
+        if (!val) return;
+        var existing = null;
+        projects.forEach(function(p){ if (p.id === currentProjectId) existing = p; });
+        var proj = existing ? cloneProject(existing) : { id: currentProjectId, createdAt: Date.now() };
+        proj.name = val;
+        writeProject(proj);
+      }
+    });
+  }
+  function deleteCurrentProject(){
+    if (!canManageProject(currentProjectId)) return;
+    var pid = currentProjectId;
+    var name = currentProjectName();
+    showConfirm({
+      title: "Delete project",
+      message: 'Assets in "' + name + '" will move to Unassigned. The project record will be removed. This can\'t be undone.',
+      confirmText: "Delete project",
+      danger: true,
+      onConfirm: function(){
+        var ids = [];
+        assets.forEach(function(a){ if ((a.projectId || "") === pid) ids.push(a.id); });
+        ids.forEach(function(id){
+          var asset = findAsset(id);
+          if (!asset) return;
+          var clone = cloneAsset(asset);
+          clone.projectId = "";
+          assetsColFor("").doc(id).set(clone).catch(function(e){ console.error(e); });
+          assetsColFor(pid).doc(id).delete().catch(function(e){ console.error(e); });
+        });
+        deleteProjectStore(pid);
+        showProjects();
+      }
+    });
+  }
+  function currentProjectName(){
+    if (currentProjectId === "") return "Unassigned";
+    var found = null;
+    projects.forEach(function(p){ if (p.id === currentProjectId) found = p; });
+    return found ? found.name : (currentProjectId || "");
+  }
+  function projectRowHtml(p){
+    var stat = projectStats[p.id] || { count: 0, complete: 0 };
+    var pct = stat.count ? Math.round((stat.complete / stat.count) * 100) : 0;
+    return (
+      '<button class="project-row ' + (p.special ? "unassigned" : "") + '" data-action="open-project" data-id="' + escapeHtml(p.id) + '">' +
+        '<div class="project-main">' +
+          '<div class="project-name">' + escapeHtml(p.name || "Untitled project") + "</div>" +
+          (p.special ? "" : '<div class="project-id">' + escapeHtml(p.id) + "</div>") +
+          '<div class="project-sub">' + stat.count + (stat.count === 1 ? " asset" : " assets") + "</div>" +
+        "</div>" +
+        '<div class="project-meta">' +
+          '<div class="project-pct ' + (stat.count && pct === 100 ? "good" : "") + '">' + (stat.count ? pct + "%" : "—") + "</div>" +
+          '<div class="project-bar-track"><div class="project-bar-fill" style="width:' + pct + '%"></div></div>' +
+        "</div>" +
+      "</button>"
+    );
+  }
+  function requestRowHtml(p){
+    var already = false;
+    myRequests.forEach(function(r){ if (r.projectId === p.id) already = true; });
+    return (
+      '<div class="project-row">' +
+        '<div class="project-main">' +
+          '<div class="project-name">' + escapeHtml(p.name || "Untitled project") + "</div>" +
+          '<div class="project-id">' + escapeHtml(p.id) + "</div>" +
+        "</div>" +
+        (already
+          ? '<span class="chip">Requested</span>'
+          : '<button class="btn-ghost" data-action="request-access" data-id="' + escapeHtml(p.id) + '">Request access</button>') +
+      "</div>"
+    );
+  }
+  var projectStats = {};
+  function refreshProjectStats(){
+    var visible = visibleProjects();
+    if (visible.length === 0){ projectStats = {}; renderProjectList(); return; }
+    var results = {};
+    var pending = visible.length;
+    visible.forEach(function(p){
+      assetsColFor(p.id).limit(1000).get().then(function(snap){
+        var complete = 0;
+        snap.docs.forEach(function(d){ if (nextStage(normalize(d.data(), d.id)) === null) complete++; });
+        results[p.id] = { count: snap.size, complete: complete };
+      }).catch(function(){ results[p.id] = { count: 0, complete: 0 }; })
+        .then(function(){ pending--; if (pending === 0){ projectStats = results; renderProjectList(); } });
+    });
+  }
+  function renderProjectList(){
+    var el = document.getElementById("projectListEl");
+    if (!accessReady){ el.innerHTML = '<div class="empty">Checking your access…</div>'; return; }
+    if (!projectsLoaded){ el.innerHTML = '<div class="empty">Loading projects…</div>'; return; }
+    if (!isAdmin && Object.keys(rolesByProject).length === 0){
+      if (projects.length === 0){
+        el.innerHTML = '<div class="empty-state"><div class="empty-title">No projects yet</div>' +
+          '<div class="empty-sub">Ask an Admin to create a project and add you to it.</div></div>';
+        return;
+      }
+      el.innerHTML = '<div class="empty-sub" style="padding:12px 4px;">You don\'t have access to any project yet — request access below.</div>' +
+        projects.slice().sort(function(a, b){ return (a.name || "").localeCompare(b.name || ""); }).map(requestRowHtml).join("");
+      return;
+    }
+    var list = visibleProjects();
+    if (list.length === 0 || (list.length === 1 && list[0].special)){
+      el.innerHTML = '<div class="empty-state"><div class="empty-title">No projects yet</div>' +
+        '<div class="empty-sub">Create a project to start tracking its assets, or import a CSV to seed one.</div></div>';
+      return;
+    }
+    el.innerHTML = list.map(projectRowHtml).join("");
+  }
+  function openManageUsers(){
+    if (!canManageUsers(currentProjectId)) return;
+    var pid = currentProjectId;
+    document.getElementById("manageUsersTitle").textContent = "Users — " + currentProjectName();
+    document.getElementById("manageUsersOverlay").hidden = false;
+    manageUsersUnsub1 = membersCol.where("projectId", "==", pid).onSnapshot(function(snap){
+      manageUsersMembers = snap.docs.map(function(d){ var v = d.data(); v.id = d.id; return v; });
+      renderManageUsers();
+    }, function(err){ console.error(err); });
+    manageUsersUnsub2 = requestsCol.where("projectId", "==", pid).onSnapshot(function(snap){
+      manageUsersRequests = snap.docs.map(function(d){ var v = d.data(); v.id = d.id; return v; });
+      renderManageUsers();
+    }, function(err){ console.error(err); });
+    manageUsersUnsub3 = disabledCol.onSnapshot(function(snap){
+      manageUsersDisabled = {};
+      snap.docs.forEach(function(d){ manageUsersDisabled[d.id] = true; });
+      renderManageUsers();
+    }, function(err){ console.error(err); });
+  }
+  function closeManageUsers(){
+    document.getElementById("manageUsersOverlay").hidden = true;
+    if (manageUsersUnsub1){ manageUsersUnsub1(); manageUsersUnsub1 = null; }
+    if (manageUsersUnsub2){ manageUsersUnsub2(); manageUsersUnsub2 = null; }
+    if (manageUsersUnsub3){ manageUsersUnsub3(); manageUsersUnsub3 = null; }
+    manageUsersMembers = [];
+    manageUsersRequests = [];
+    manageUsersDisabled = {};
+  }
+  function roleOptionsHtml(selected){
+    var opts = isAdmin ? ["Contractor", "Supervisor", "Admin"] : ["Contractor", "Supervisor"];
+    return opts.map(function(r){
+      return '<option value="' + r + '"' + (r === selected ? " selected" : "") + '>' + r + "</option>";
+    }).join("");
+  }
+  function renderManageUsers(){
+    var body = document.getElementById("manageUsersBody");
+    var pid = currentProjectId;
+    var reqHtml = manageUsersRequests.map(function(r){
+      return (
+        '<li class="member-row">' +
+          '<div class="member-main"><div class="member-name">' + escapeHtml(r.userName || "Unnamed") + '</div><div class="member-sub">Requesting access</div></div>' +
+          '<select class="role-select" id="reqRole-' + escapeHtml(r.id) + '">' + roleOptionsHtml("Contractor") + "</select>" +
+          '<button class="btn-accent btn-sm" data-action="approve-request" data-id="' + escapeHtml(r.id) + '" data-user="' + escapeHtml(r.userId) + '" data-name="' + escapeHtml(r.userName || "") + '">Approve</button>' +
+          '<button class="seal-remove" data-action="deny-request" data-id="' + escapeHtml(r.id) + '" aria-label="Deny">×</button>' +
+        "</li>"
+      );
+    }).join("");
+    var memHtml = manageUsersMembers.length ? manageUsersMembers.map(function(m){
+      var canManageThis = isAdmin || (myRoleInProject(pid) === "Supervisor" && m.role !== "Admin");
+      var canRemove = canManageThis;
+      var canReset = canManageThis && m.userId !== myId;
+      var canToggle = canManageThis && m.userId !== myId;
+      var isDisabled = !!manageUsersDisabled[m.userId];
+      var subText = escapeHtml(m.role) + (isDisabled ? " · Disabled" : "");
+      return (
+        '<li class="member-row">' +
+          '<div class="member-main"><div class="member-name">' + escapeHtml(m.userName || m.userId) + '</div><div class="member-sub">' + subText + '</div></div>' +
+          (canReset ? '<button class="btn-ghost btn-sm" data-action="reset-password" data-id="' + escapeHtml(m.userId) + '" data-name="' + escapeHtml(m.userName || "") + '">Reset password</button>' : "") +
+          (canToggle ? '<button class="btn-ghost btn-sm" data-action="toggle-disabled" data-id="' + escapeHtml(m.userId) + '" data-name="' + escapeHtml(m.userName || "") + '" data-disabled="' + (isDisabled ? "1" : "0") + '">' + (isDisabled ? "Enable" : "Disable") + "</button>" : "") +
+          (canRemove ? '<button class="seal-remove" data-action="remove-member" data-id="' + escapeHtml(m.id) + '" aria-label="Remove">×</button>' : "") +
+        "</li>"
+      );
+    }).join("") : '<li class="empty-sm">No users added yet.</li>';
+    body.innerHTML =
+      (reqHtml ? "<h3>Pending requests</h3><ul class=\"seals\">" + reqHtml + "</ul>" : "") +
+      "<h3>Members</h3><ul class=\"seals\">" + memHtml + "</ul>";
+  }
+  function approveRequest(reqId, userId, userName){
+    var pid = currentProjectId;
+    var sel = document.getElementById("reqRole-" + reqId);
+    var role = sel ? sel.value : "Contractor";
+    if (!isAdmin && role === "Admin") role = "Supervisor";
+    membersCol.doc(reqId).set({ projectId: pid, userId: userId, userName: userName || "Unnamed", role: role, addedAt: Date.now() })
+      .then(function(){ return requestsCol.doc(reqId).delete(); })
+      .catch(function(e){ console.error(e); toast("Couldn't approve — " + e.message); });
+  }
+  function denyRequest(reqId){
+    requestsCol.doc(reqId).delete().catch(function(e){ console.error(e); toast("Couldn't remove the request."); });
+  }
+  function removeMember(memberId){
+    membersCol.doc(memberId).delete().catch(function(e){ console.error(e); toast("Couldn't remove the user."); });
+  }
+  function toggleMemberDisabled(targetUid, targetName, currentlyDisabled){
+    var pid = currentProjectId;
+    var who = targetName || "This user";
+    function doToggle(){
+      functions.httpsCallable("setAccountDisabled")({ targetUid: targetUid, projectId: pid, disabled: !currentlyDisabled })
+        .then(function(){ toast(currentlyDisabled ? "Account re-enabled." : "Account disabled."); })
+        .catch(function(e){ console.error(e); toast(e.message || "Couldn't update that account."); });
+    }
+    if (currentlyDisabled){
+      doToggle();
+    } else {
+      showConfirm({
+        title: "Disable account",
+        message: who + " won't be able to sign in until an Admin or Supervisor re-enables their account.",
+        confirmText: "Disable account",
+        danger: true,
+        onConfirm: doToggle
+      });
+    }
+  }
+  function resetMemberPassword(targetUid, targetName){
+    toast("Resetting password…");
+    functions.httpsCallable("resetUserPassword")({ targetUid: targetUid, projectId: currentProjectId })
+      .then(function(result){
+        openTempPasswordModal(targetName, result.data.tempPassword, result.data.smsSent);
+      })
+      .catch(function(e){
+        console.error(e);
+        toast(e.message || "Couldn't reset that password.");
+      });
+  }
+  function openTempPasswordModal(name, tempPassword, smsSent){
+    var who = name || "this user";
+    document.getElementById("tempPasswordIntro").textContent = smsSent
+      ? "Texted to " + who + ". Temporary password (in case the text doesn't arrive):"
+      : "Temporary password for " + who + " — no mobile number on file, so relay this yourself:";
+    document.getElementById("tempPasswordValue").value = tempPassword;
+    document.getElementById("tempPasswordOverlay").hidden = false;
+  }
+  function closeTempPasswordModal(){
+    document.getElementById("tempPasswordOverlay").hidden = true;
+    document.getElementById("tempPasswordValue").value = "";
+  }
+  function copyTempPassword(){
+    var input = document.getElementById("tempPasswordValue");
+    input.select();
+    input.setSelectionRange(0, 999);
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(input.value).then(function(){ toast("Copied."); });
+      } else {
+        document.execCommand("copy");
+        toast("Copied.");
+      }
+    } catch (e){ toast("Couldn't copy — select and copy it manually."); }
+  }
+  // ---------- render ----------
+  function renderFilters(){
+    var el = document.getElementById("filterBar");
+    el.innerHTML = FILTERS.map(function(f){
+      return '<button class="chip ' + (filter === f.key ? "active" : "") + '" data-action="filter" data-filter="' +
+        escapeHtml(f.key) + '">' + escapeHtml(f.label) + "</button>";
+    }).join("");
+  }
+  function setFilter(key){ filter = key; renderFilters(); renderList(); }
+
+  function renderStats(){
+    var el = document.getElementById("statsEl");
+    var scoped = projectAssets();
+    var total = scoped.length;
+    if (total === 0){ el.innerHTML = ""; return; }
+    var complete = 0;
+    scoped.forEach(function(a){ if (nextStage(a) === null) complete++; });
+    var chips = STAGES.map(function(name){
+      var count = 0;
+      scoped.forEach(function(a){
+        a.stages.forEach(function(s){ if (s.name === name && s.done) count++; });
+      });
+      return '<div class="stat"><span class="stat-n">' + count + '</span><span class="stat-l">' + escapeHtml(name) + "</span></div>";
+    }).join("");
+    el.innerHTML =
+      '<div class="stat stat-total"><span class="stat-n">' + total + '</span><span class="stat-l">Assets</span></div>' +
+      chips +
+      '<div class="stat stat-good"><span class="stat-n">' + complete + '</span><span class="stat-l">Energized</span></div>';
+  }
+
+  function rowHtml(asset){
+    var next = nextStage(asset);
+    var complete = next === null;
+    var statusText = complete ? "Complete" : "Next: " + next;
+    var dots = asset.stages.map(function(s){
+      return '<span class="dot ' + (s.done ? "done" : "") + '"></span>';
+    }).join("");
+    var tagBits = [];
+    if (asset.location) tagBits.push(asset.location);
+    if (asset.level) tagBits.push("Lvl " + asset.level);
+    if (asset.optiNum) tagBits.push("OPTI " + asset.optiNum);
+    var tagsHtml = tagBits.length ? '<div class="row-tags">' + tagBits.map(function(b){
+      return '<span class="tag-pill">' + escapeHtml(b) + "</span>";
+    }).join("") + "</div>" : "";
+    return (
+      '<button class="row ' + (complete ? "row-complete" : "") + '" data-action="open" data-id="' + escapeHtml(asset.id) + '">' +
+        '<div class="row-main">' +
+          '<div class="row-id">' + escapeHtml(asset.id) + "</div>" +
+          '<div class="row-label">' + escapeHtml(asset.label || "Unlabeled asset") + "</div>" +
+          tagsHtml +
+        "</div>" +
+        '<div class="row-meta">' +
+          '<div class="dots">' + dots + "</div>" +
+          '<div class="row-status ' + (complete ? "good" : "") + '">' + escapeHtml(statusText) + "</div>" +
+          '<div class="row-seals">' + asset.seals.length + (asset.seals.length === 1 ? " seal" : " seals") + "</div>" +
+        "</div>" +
+      "</button>"
+    );
+  }
+  function emptyStateHtml(){
+    return (
+      '<div class="empty-state">' +
+        '<div class="empty-title">No assets yet</div>' +
+        '<div class="empty-sub">Scan a QR code already on an asset, or create a new one and print its tag.</div>' +
+      "</div>"
+    );
+  }
+  function renderList(){
+    var listEl = document.getElementById("listEl");
+    if (!loaded){ listEl.innerHTML = '<div class="empty">Loading assets…</div>'; return; }
+    var scoped = projectAssets();
+    if (scoped.length === 0){ listEl.innerHTML = emptyStateHtml(); return; }
+    var visible = scoped.filter(function(a){ return matchesFilter(a) && matchesSearch(a); });
+    if (visible.length === 0){ listEl.innerHTML = '<div class="empty">No assets match your search or filter.</div>'; return; }
+    listEl.innerHTML = visible.map(rowHtml).join("");
+  }
+
+  function openDetail(id){
+    detailId = id;
+    renderDetail();
+    document.getElementById("detailOverlay").hidden = false;
+    document.body.classList.add("no-scroll");
+  }
+  function closeDetail(){
+    detailId = null;
+    document.getElementById("detailOverlay").hidden = true;
+    document.body.classList.remove("no-scroll");
+  }
+  function renderDetail(){
+    var asset = findAsset(detailId);
+    var body = document.getElementById("detailBody");
+    if (!asset){ body.innerHTML = '<div class="empty">Asset not found.</div>'; return; }
+
+    var stepsHtml = asset.stages.map(function(s){
+      return (
+        '<button class="step ' + (s.done ? "done" : "") + '" data-action="toggle-stage" data-id="' + escapeHtml(asset.id) + '" data-stage="' + escapeHtml(s.name) + '">' +
+          '<span class="step-mark"></span>' +
+          '<span class="step-body">' +
+            '<span class="step-name">' + escapeHtml(s.name) + "</span>" +
+            '<span class="step-time">' + (s.done ? formatTime(s.at) : "Not yet") + "</span>" +
+          "</span>" +
+        "</button>"
+      );
+    }).join("");
+
+    var sealsHtml = asset.seals.length ? asset.seals.map(function(seal, i){
+      return (
+        '<li class="seal-row">' +
+          '<span class="seal-code">' + escapeHtml(seal.code) + "</span>" +
+          '<input class="seal-note" type="text" placeholder="Add note" value="' + escapeHtml(seal.note || "") + '" data-action="seal-note" data-id="' + escapeHtml(asset.id) + '" data-idx="' + i + '">' +
+          '<span class="seal-time">' + formatTime(seal.at) + "</span>" +
+          '<button class="seal-remove" data-action="remove-seal" data-id="' + escapeHtml(asset.id) + '" data-idx="' + i + '" aria-label="Remove seal">×</button>' +
+        "</li>"
+      );
+    }).join("") : '<li class="empty-sm">No tamper seals logged yet.</li>';
+
+    body.innerHTML =
+      '<div class="detail-head">' +
+        '<div class="detail-id">' + escapeHtml(asset.id) + "</div>" +
+        fieldInputHtml(asset, "label", "Label / description", "detail-field detail-field-wide") +
+        '<div class="field-grid">' +
+          fieldInputHtml(asset, "location", "Location") +
+          fieldInputHtml(asset, "level", "Level") +
+          fieldInputHtml(asset, "optiNum", "OPTI #") +
+        "</div>" +
+        '<div class="detail-created">Added ' + formatDate(asset.createdAt) + "</div>" +
+      "</div>" +
+      '<div class="detail-qr">' +
+        '<div class="qr-box" id="qrCanvas"></div>' +
+        '<button class="btn-ghost" data-action="download-qr">Save QR label</button>' +
+      "</div>" +
+      '<div class="detail-section">' +
+        "<h3>Progress</h3>" +
+        '<div class="steps">' + stepsHtml + "</div>" +
+      "</div>" +
+      '<div class="detail-section">' +
+        "<h3>Tamper seals</h3>" +
+        '<div class="seal-actions">' +
+          '<button class="btn-accent" data-action="scan-seal">Scan seal</button>' +
+          '<button class="btn-ghost" data-action="manual-seal">Enter code</button>' +
+        "</div>" +
+        '<ul class="seals">' + sealsHtml + "</ul>" +
+      "</div>" +
+      (canDeleteAssets(currentProjectId)
+        ? '<div class="detail-section"><button class="btn-danger" data-action="delete-asset" data-id="' + escapeHtml(asset.id) + '">Remove asset</button></div>'
+        : "");
+
+    requestAnimationFrame(function(){
+      drawQr(document.getElementById("qrCanvas"), asset.id);
+    });
+  }
+
+  function downloadQr(){
+    var asset = findAsset(detailId);
+    var box = document.getElementById("qrCanvas");
+    var canvas = box ? box.querySelector("canvas") : null;
+    if (!asset || !canvas){ toast("QR isn't ready yet — try reopening this asset."); return; }
+    canvas.toBlob(function(blob){
+      if (!blob) return;
+      browserDownload(asset.id + ".png", blob, "image/png");
+    }, "image/png");
+  }
+
+  function exportCsv(){
+    var header = ["Asset ID", "Location", "Level", "OPTI#", "Label"].concat(STAGES).concat(["Tamper Seals"]);
+    var rows = projectAssets().map(function(a){
+      var stageVals = a.stages.map(function(s){ return s.done ? formatDate(s.at) : ""; });
+      var seals = a.seals.map(function(s){ return s.code; }).join("; ");
+      return [a.id, a.location || "", a.level || "", a.optiNum || "", a.label || ""].concat(stageVals).concat([seals]);
+    });
+    var csv = [header].concat(rows).map(function(r){ return r.map(csvEscape).join(","); }).join("\r\n");
+    var fname = (currentProjectId === "" ? "unassigned" : currentProjectId).replace(/[:@]/g, "-") + "-assets.csv";
+    browserDownload(fname, csv, "text/csv");
+  }
+
+  // ---------- import ----------
+  var IMPORT_FIELD_MAP = {
+    "asset id": "id", "assetid": "id", "id": "id",
+    "location": "location", "site": "location",
+    "level": "level", "floor": "level",
+    "opti#": "optiNum", "opti #": "optiNum", "opti": "optiNum", "opti number": "optiNum", "optinumber": "optiNum",
+    "label": "label", "description": "label", "notes": "label"
+  };
+  function parseCsv(text){
+    var rows = [];
+    var row = [];
+    var field = "";
+    var inQuotes = false;
+    var i = 0;
+    var len = text.length;
+    while (i < len){
+      var c = text[i];
+      if (inQuotes){
+        if (c === '"'){
+          if (text[i + 1] === '"'){ field += '"'; i += 2; continue; }
+          inQuotes = false; i++; continue;
+        }
+        field += c; i++; continue;
+      }
+      if (c === '"'){ inQuotes = true; i++; continue; }
+      if (c === ','){ row.push(field); field = ""; i++; continue; }
+      if (c === '\r'){ i++; continue; }
+      if (c === '\n'){ row.push(field); rows.push(row); row = []; field = ""; i++; continue; }
+      field += c; i++;
+    }
+    row.push(field);
+    rows.push(row);
+    return rows.filter(function(r){ return !(r.length === 1 && r[0].trim() === ""); });
+  }
+  function downloadTemplate(){
+    var header = ["Asset ID", "Location", "Level", "OPTI#", "Label"];
+    var sample = ["AST-000001", "Building A - Panel 3", "2", "OPTI-4521", "Main electrical room"];
+    var csv = [header, sample].map(function(r){ return r.map(csvEscape).join(","); }).join("\r\n");
+    browserDownload("trackline-import-template.csv", csv, "text/csv");
+  }
+  function openImportModal(){ document.getElementById("importOverlay").hidden = false; }
+  function closeImportModal(){ document.getElementById("importOverlay").hidden = true; }
+  function processImportFile(file){
+    var reader = new FileReader();
+    reader.onload = function(e){
+      try {
+        var rows = parseCsv(String(e.target.result || ""));
+        if (rows.length < 2){ toast("That file doesn't have any data rows."); return; }
+        var header = rows[0].map(function(h){ return String(h || "").trim().toLowerCase(); });
+        var colMap = {};
+        header.forEach(function(h, idx){
+          var mapped = IMPORT_FIELD_MAP[h];
+          if (mapped && !(mapped in colMap)) colMap[mapped] = idx;
+        });
+        if (colMap.id === undefined){ toast("The CSV needs an Asset ID column."); return; }
+        var created = 0, updated = 0, skipped = 0;
+        for (var r = 1; r < rows.length; r++){
+          var cells = rows[r];
+          if (!cells || cells.every(function(c){ return String(c).trim() === ""; })) continue;
+          var rawId = (cells[colMap.id] || "").trim();
+          var id = sanitizeId(rawId);
+          if (!id){ skipped++; continue; }
+          var vals = {
+            location: colMap.location !== undefined ? (cells[colMap.location] || "").trim() : "",
+            level: colMap.level !== undefined ? (cells[colMap.level] || "").trim() : "",
+            optiNum: colMap.optiNum !== undefined ? (cells[colMap.optiNum] || "").trim() : "",
+            label: colMap.label !== undefined ? (cells[colMap.label] || "").trim() : ""
+          };
+          var existing = findAsset(id);
+          if (existing){
+            var clone = cloneAsset(existing);
+            Object.keys(vals).forEach(function(k){ if (vals[k]) clone[k] = vals[k]; });
+            writeAsset(clone);
+            updated++;
+          } else {
+            createAsset(rawId, vals);
+            created++;
+          }
+        }
+        toast("Imported " + created + " new, updated " + updated + (skipped ? ", skipped " + skipped : "") + ".");
+      } catch (err){
+        console.error(err);
+        toast("Import failed — check the file format.");
+      }
+    };
+    reader.onerror = function(){ toast("Couldn't read that file."); };
+    reader.readAsText(file);
+  }
+
+  // ---------- scanner ----------
+  function openScanner(ctx){
+    scanCtx = ctx;
+    document.getElementById("scanTitle").textContent = ctx.type === "add" ? "Scan asset QR code" : "Scan tamper seal";
+    document.getElementById("scannerOverlay").hidden = false;
+    document.getElementById("manualCodeInput").value = "";
+    document.body.classList.add("no-scroll");
+    try {
+      qrInstance = new Html5Qrcode("reader");
+      qrInstance.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 240, height: 240 } },
+        function(decodedText){ handleScanResult(String(decodedText).trim()); },
+        function(){ /* per-frame miss, ignore */ }
+      ).catch(function(e){
+        console.error(e);
+        toast("Camera unavailable — type the code below instead.");
+      });
+    } catch (e){
+      console.error(e);
+      toast("Camera unavailable — type the code below instead.");
+    }
+  }
+  function closeScanner(){
+    document.getElementById("scannerOverlay").hidden = true;
+    document.body.classList.remove("no-scroll");
+    var inst = qrInstance;
+    qrInstance = null;
+    if (inst){
+      inst.stop().then(function(){ try { inst.clear(); } catch (e) {} }).catch(function(){});
+    }
+  }
+  function handleScanResult(code){
+    closeScanner();
+    if (!code) { scanCtx = null; return; }
+    if (scanCtx && scanCtx.type === "seal"){
+      addSeal(scanCtx.assetId, code);
+    } else {
+      handleAssetCode(code);
+    }
+    scanCtx = null;
+  }
+  function handleAssetCode(code){
+    var existing = null;
+    assets.forEach(function(a){ if (a.id === code || a.code === code) existing = a; });
+    if (existing){
+      if ((existing.projectId || "") === currentProjectId){
+        openDetail(existing.id);
+      } else {
+        toast("That asset belongs to a different project.");
+      }
+      return;
+    }
+    if (!canCreateAssets(currentProjectId)){
+      toast("This code isn't assigned yet — ask a Supervisor or Admin to add it.");
+      return;
+    }
+    showConfirm({
+      title: "New code scanned",
+      message: "This code isn't assigned to an asset yet:\n" + code + "\n\nAssign it to " + currentProjectName() + "?",
+      confirmText: "Assign asset",
+      onConfirm: function(){
+        var a = createAsset(code, {});
+        if (a) openDetail(a.id);
+      }
+    });
+  }
+
+  // ---------- modals ----------
+  function showConfirm(opts){
+    document.getElementById("confirmTitle").textContent = opts.title || "Are you sure?";
+    document.getElementById("confirmMessage").textContent = opts.message || "";
+    var btn = document.getElementById("confirmYesBtn");
+    btn.textContent = opts.confirmText || "Confirm";
+    btn.classList.toggle("btn-danger", !!opts.danger);
+    btn.classList.toggle("btn-accent", !opts.danger);
+    confirmCallback = opts.onConfirm || null;
+    document.getElementById("confirmOverlay").hidden = false;
+  }
+  function hideConfirm(){
+    document.getElementById("confirmOverlay").hidden = true;
+    confirmCallback = null;
+  }
+  function showPrompt(opts){
+    document.getElementById("promptTitle").textContent = opts.title || "Enter code";
+    var input = document.getElementById("promptInput");
+    input.value = "";
+    input.placeholder = opts.placeholder || "";
+    document.getElementById("promptConfirmBtn").textContent = opts.confirmText || "Add";
+    promptCallback = opts.onConfirm || null;
+    document.getElementById("promptOverlay").hidden = false;
+    setTimeout(function(){ input.focus(); }, 60);
+  }
+  function hidePrompt(){
+    document.getElementById("promptOverlay").hidden = true;
+    promptCallback = null;
+  }
+
+  // ---------- theme ----------
+  function applyThemeIcon(t){
+    var icon = t === "dark" ? "☀" : "◐";
+    var a = document.getElementById("themeBtn");
+    var b = document.getElementById("themeBtnP");
+    if (a) a.textContent = icon;
+    if (b) b.textContent = icon;
+  }
+  function toggleTheme(){
+    var root = document.documentElement;
+    var cur = root.getAttribute("data-theme");
+    var next = cur === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem("trackline_theme", next); } catch (e) {}
+    applyThemeIcon(next);
+  }
+  (function initTheme(){
+    var saved = null;
+    try { saved = localStorage.getItem("trackline_theme"); } catch (e) {}
+    if (saved) document.documentElement.setAttribute("data-theme", saved);
+    applyThemeIcon(saved || "");
+  })();
+
+  // ---------- events ----------
+  document.addEventListener("click", function(e){
+    var t = e.target.closest ? e.target.closest("[data-action]") : null;
+    if (!t) return;
+    var action = t.getAttribute("data-action");
+    switch (action){
+      case "open": openDetail(t.getAttribute("data-id")); break;
+      case "close-detail": closeDetail(); break;
+      case "toggle-stage": toggleStage(t.getAttribute("data-id"), t.getAttribute("data-stage")); break;
+      case "scan-add": openScanner({ type: "add" }); break;
+      case "scan-seal": openScanner({ type: "seal", assetId: detailId }); break;
+      case "manual-seal":
+        showPrompt({
+          title: "Enter tamper seal code",
+          placeholder: "Seal code / barcode number",
+          confirmText: "Add seal",
+          onConfirm: function(val){ addSeal(detailId, val); }
+        });
+        break;
+      case "remove-seal":
+        showConfirm({
+          title: "Remove seal record",
+          message: "Remove this tamper seal entry? This can't be undone.",
+          confirmText: "Remove",
+          danger: true,
+          onConfirm: (function(id, idx){ return function(){ removeSeal(id, idx); }; })(t.getAttribute("data-id"), +t.getAttribute("data-idx"))
+        });
+        break;
+      case "delete-asset":
+        showConfirm({
+          title: "Remove asset",
+          message: "This deletes all progress and seal history for " + t.getAttribute("data-id") + ". This can't be undone.",
+          confirmText: "Remove asset",
+          danger: true,
+          onConfirm: (function(id){ return function(){ deleteAssetStore(id); closeDetail(); }; })(t.getAttribute("data-id"))
+        });
+        break;
+      case "download-qr": downloadQr(); break;
+      case "close-scanner": closeScanner(); scanCtx = null; break;
+      case "export-csv": exportCsv(); break;
+      case "open-import": openImportModal(); break;
+      case "close-import": closeImportModal(); break;
+      case "download-template": downloadTemplate(); break;
+      case "choose-import-file": document.getElementById("importFileInput").click(); break;
+      case "new-asset": openNewAssetModal(); break;
+      case "new-asset-cancel": closeNewAssetModal(); break;
+      case "open-project": showDashboard(t.getAttribute("data-id")); break;
+      case "back-to-projects": showProjects(); break;
+      case "new-project": openNewProjectModal(); break;
+      case "new-project-cancel": closeNewProjectModal(); break;
+      case "rename-project": renameCurrentProject(); break;
+      case "delete-project": deleteCurrentProject(); break;
+      case "open-manage-users": openManageUsers(); break;
+      case "close-manage-users": closeManageUsers(); break;
+      case "request-access": requestAccess(t.getAttribute("data-id")); break;
+      case "approve-request": approveRequest(t.getAttribute("data-id"), t.getAttribute("data-user"), t.getAttribute("data-name")); break;
+      case "deny-request": denyRequest(t.getAttribute("data-id")); break;
+      case "remove-member": removeMember(t.getAttribute("data-id")); break;
+      case "reset-password": resetMemberPassword(t.getAttribute("data-id"), t.getAttribute("data-name")); break;
+      case "toggle-disabled": toggleMemberDisabled(t.getAttribute("data-id"), t.getAttribute("data-name"), t.getAttribute("data-disabled") === "1"); break;
+      case "copy-temp-password": copyTempPassword(); break;
+      case "close-temp-password": closeTempPasswordModal(); break;
+      case "confirm-yes": { var cb = confirmCallback; hideConfirm(); if (cb) cb(); break; }
+      case "confirm-no": hideConfirm(); break;
+      case "prompt-cancel": hidePrompt(); break;
+      case "theme-toggle": toggleTheme(); break;
+      case "filter": setFilter(t.getAttribute("data-filter")); break;
+      case "sign-out": auth.signOut(); break;
+      case "open-profile": openProfileModal(); break;
+      case "close-profile": closeProfileModal(); break;
+      case "open-change-password": openChangePasswordModal(); break;
+      case "close-change-password": closeChangePasswordModal(); break;
+    }
+  });
+
+  document.addEventListener("change", function(e){
+    var t = e.target;
+    if (!t || !t.getAttribute) return;
+    var action = t.getAttribute("data-action");
+    if (action === "edit-field") updateAssetField(t.getAttribute("data-id"), t.getAttribute("data-field"), t.value.trim());
+    if (action === "seal-note") updateSealNote(t.getAttribute("data-id"), +t.getAttribute("data-idx"), t.value);
+  });
+
+  document.getElementById("searchInput").addEventListener("input", function(e){
+    search = e.target.value;
+    renderList();
+  });
+
+  document.getElementById("manualCodeForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    var val = document.getElementById("manualCodeInput").value.trim();
+    if (val) handleScanResult(val);
+  });
+
+  document.getElementById("promptForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    var val = document.getElementById("promptInput").value.trim();
+    var cb = promptCallback;
+    hidePrompt();
+    if (val && cb) cb(val);
+  });
+
+  document.getElementById("confirmOverlay").addEventListener("click", function(e){
+    if (e.target.id === "confirmOverlay") hideConfirm();
+  });
+  document.getElementById("promptOverlay").addEventListener("click", function(e){
+    if (e.target.id === "promptOverlay") hidePrompt();
+  });
+  document.getElementById("detailOverlay").addEventListener("click", function(e){
+    if (e.target.id === "detailOverlay") closeDetail();
+  });
+  document.getElementById("newAssetOverlay").addEventListener("click", function(e){
+    if (e.target.id === "newAssetOverlay") closeNewAssetModal();
+  });
+  document.getElementById("importOverlay").addEventListener("click", function(e){
+    if (e.target.id === "importOverlay") closeImportModal();
+  });
+  document.getElementById("importFileInput").addEventListener("change", function(e){
+    var file = e.target.files && e.target.files[0];
+    closeImportModal();
+    if (file) processImportFile(file);
+    e.target.value = "";
+  });
+  document.getElementById("newAssetIdInput").addEventListener("input", drawNewAssetQrPreview);
+  document.getElementById("newAssetForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    submitNewAsset();
+  });
+  document.getElementById("newProjectOverlay").addEventListener("click", function(e){
+    if (e.target.id === "newProjectOverlay") closeNewProjectModal();
+  });
+  document.getElementById("newProjectNameInput").addEventListener("input", function(e){
+    if (!projectIdTouched) document.getElementById("newProjectIdInput").value = sanitizeId(e.target.value);
+  });
+  document.getElementById("newProjectIdInput").addEventListener("input", function(){ projectIdTouched = true; });
+  document.getElementById("newProjectForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    submitNewProject();
+  });
+  document.getElementById("manageUsersOverlay").addEventListener("click", function(e){
+    if (e.target.id === "manageUsersOverlay") closeManageUsers();
+  });
+  document.getElementById("authForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    var email = document.getElementById("authEmailInput").value.trim();
+    var pw = document.getElementById("authPasswordInput").value;
+    var name = document.getElementById("authNameInput").value.trim();
+    var errEl = document.getElementById("authError");
+    errEl.hidden = true;
+    if (authMode === "signup"){
+      auth.createUserWithEmailAndPassword(email, pw).then(function(cred){
+        return cred.user.updateProfile({ displayName: name || email.split("@")[0] });
+      }).catch(function(err){ errEl.textContent = err.message; errEl.hidden = false; });
+    } else {
+      auth.signInWithEmailAndPassword(email, pw).catch(function(err){ errEl.textContent = err.message; errEl.hidden = false; });
+    }
+  });
+  document.getElementById("authToggleBtn").addEventListener("click", function(){
+    authMode = authMode === "signin" ? "signup" : "signin";
+    updateAuthUi();
+  });
+  document.getElementById("profileOverlay").addEventListener("click", function(e){
+    if (e.target.id === "profileOverlay") closeProfileModal();
+  });
+  document.getElementById("profileForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    submitProfile();
+  });
+  document.getElementById("changePasswordOverlay").addEventListener("click", function(e){
+    if (e.target.id === "changePasswordOverlay") closeChangePasswordModal();
+  });
+  document.getElementById("changePasswordForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    submitChangePassword();
+  });
+  document.getElementById("tempPasswordOverlay").addEventListener("click", function(e){
+    if (e.target.id === "tempPasswordOverlay") closeTempPasswordModal();
+  });
+  document.getElementById("forcePasswordForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    var errEl = document.getElementById("forcePasswordError");
+    errEl.hidden = true;
+    var newPw = document.getElementById("forceNewPasswordInput").value;
+    var confirmPw = document.getElementById("forceConfirmPasswordInput").value;
+    if (newPw.length < 6){ errEl.textContent = "Password must be at least 6 characters."; errEl.hidden = false; return; }
+    if (newPw !== confirmPw){ errEl.textContent = "Passwords don't match."; errEl.hidden = false; return; }
+    var user = auth.currentUser;
+    if (!user){ errEl.textContent = "You're not signed in."; errEl.hidden = false; return; }
+    user.updatePassword(newPw).then(function(){
+      return mustChangeCol.doc(myId).delete();
+    }).then(function(){
+      toast("Password set.");
+    }).catch(function(err){
+      errEl.textContent = err.code === "auth/requires-recent-login"
+        ? "Please sign out and sign in again with your temporary password, then retry."
+        : err.message;
+      errEl.hidden = false;
+    });
+  });
+
+  // ---------- init ----------
+  renderFilters();
+  updateAuthUi();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,126 @@
+rules_version = '2';
+
+// Trackline security rules.
+// Data model:
+//   /admins/{uid}                          — doc exists  => that user is a global Admin
+//   /projects/{projectId}                  — {name, createdAt}
+//   /projects/{projectId}/assets/{assetId} — the actual asset records
+//   /members/{projectId}_{uid}             — {projectId, userId, userName, role, addedAt}
+//                                             role is "Supervisor" or "Contractor"
+//   /accessRequests/{projectId}_{uid}      — {projectId, userId, userName, requestedAt}
+//   /mustChangePassword/{uid}               — doc exists => that user must set a new
+//                                             password before using the app; only the
+//                                             resetUserPassword Cloud Function creates it
+//   /users/{uid}                            — {name, phone} — self-editable profile,
+//                                             phone is used by resetUserPassword for SMS
+//   /disabledAccounts/{uid}                 — doc exists => that account is disabled;
+//                                             only the setAccountDisabled Cloud
+//                                             Function creates/removes it
+//
+// "Unassigned" assets live under /projects/_unassigned/assets and are visible to Admins only.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function memberDoc(projectId) {
+      return get(/databases/$(database)/documents/members/$(projectId + '_' + request.auth.uid));
+    }
+
+    function hasProjectAccess(projectId) {
+      return isAdmin() || (signedIn() &&
+        exists(/databases/$(database)/documents/members/$(projectId + '_' + request.auth.uid)));
+    }
+
+    function myRole(projectId) {
+      return isAdmin() ? 'Admin' : memberDoc(projectId).data.role;
+    }
+
+    function canCreateOrManage(projectId) {
+      return isAdmin() || (hasProjectAccess(projectId) && myRole(projectId) in ['Admin', 'Supervisor']);
+    }
+
+    // ---- projects ----
+    match /projects/{projectId} {
+      // Anyone signed in can read project names (needed for the "request access" list).
+      allow read: if signedIn();
+      // Only Admins create, rename, or delete a project.
+      allow create, update, delete: if isAdmin();
+
+      // ---- assets, scoped to their project ----
+      match /assets/{assetId} {
+        allow read: if hasProjectAccess(projectId);
+        allow create: if canCreateOrManage(projectId);
+        allow update: if hasProjectAccess(projectId);
+        allow delete: if canCreateOrManage(projectId);
+      }
+    }
+
+    // ---- global admins ----
+    match /admins/{uid} {
+      allow read: if signedIn();
+      // Only an existing Admin can grant/revoke Admin. The very first Admin
+      // is bootstrapped manually in the Firebase console — see SETUP.md.
+      allow write: if isAdmin();
+    }
+
+    // ---- project members ----
+    match /members/{memberId} {
+      allow read: if signedIn();
+      // memberId must be "{projectId}_{uid}"; only an Admin, or a Supervisor
+      // of that same project, can add or remove a member.
+      allow create, delete: if signedIn() &&
+        memberId == (request.resource == null
+          ? resource.data.projectId + '_' + resource.data.userId
+          : request.resource.data.projectId + '_' + request.resource.data.userId) &&
+        canCreateOrManage(memberId.split('_')[0]);
+      allow update: if false; // remove + re-add instead of editing a role in place
+    }
+
+    // ---- access requests ----
+    match /accessRequests/{reqId} {
+      allow read: if signedIn();
+      // A user can only create/delete their own request (id must be "{projectId}_{their uid}").
+      allow create: if signedIn() &&
+        reqId == request.resource.data.projectId + '_' + request.auth.uid &&
+        request.resource.data.userId == request.auth.uid;
+      // The requester can withdraw it; an Admin or the project's Supervisor can deny/approve it.
+      allow delete: if signedIn() &&
+        (reqId == (resource.data.projectId + '_' + request.auth.uid) ||
+         canCreateOrManage(resource.data.projectId));
+    }
+
+    // ---- forced password change flag ----
+    // Only the resetUserPassword Cloud Function (Admin SDK, bypasses these rules)
+    // ever creates one of these. A signed-in user may only read/clear their own.
+    match /mustChangePassword/{uid} {
+      allow read, delete: if signedIn() && request.auth.uid == uid;
+      allow create, update: if false;
+    }
+
+    // ---- user profiles (name, mobile number) ----
+    // Anyone signed in can read (needed so the Users panel can show names), but a
+    // user can only ever write their own profile.
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // ---- disabled accounts ----
+    // Only the setAccountDisabled Cloud Function (Admin SDK, bypasses these rules)
+    // ever writes one of these. Any signed-in user can read — the app uses this both
+    // to show status in the Users panel and so a disabled user's own client can
+    // detect it and sign itself out.
+    match /disabledAccounts/{uid} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+  }
+}
