@@ -1,5 +1,7 @@
 # Trackline — self-hosted setup
 
+(This guide predates v0.2. Steps 1–5 still apply. For building and hosting the app, see README.md → Release.)
+
 This bundle has three files:
 
 - `index.html` — the whole app (one file, same as before, now talking to Firebase instead of Claude)

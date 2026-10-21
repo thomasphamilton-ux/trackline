@@ -25,3 +25,6 @@ Thumbs.db
 
 # Build output
 dist/
+*.tsbuildinfo
+firestore-debug.log
+.env.local

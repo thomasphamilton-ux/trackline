@@ -59,7 +59,7 @@ service cloud.firestore {
 
     // Fields a Contractor may change on an asset.
     function contractorEditableKeys() {
-      return ['stages', 'label', 'location', 'level', 'optiNum', 'seals', 'updatedAt', 'updatedBy'];
+      return ['stages', 'progress', 'label', 'location', 'level', 'optiNum', 'seals', 'updatedAt', 'updatedBy'];
     }
 
     // Stages only Admins and Supervisors may change. Keep in sync with

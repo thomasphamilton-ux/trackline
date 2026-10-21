@@ -1,52 +1,50 @@
 # Trackline
 
-Asset install/energization tracker with QR and barcode scanning, per-project dashboards,
-role-based access (Admin / Supervisor / Contractor), CSV import/export, and password
-reset with optional SMS. Single-file frontend, Firebase for auth/data/backend logic.
+Asset install and energization tracker: per-project equipment lists, the energization
+stage sequence (Installed → Terminated → EC FOD → L2's Complete → INT FOD → FTE, then
+turnover to IFS Services), QR and barcode scanning, CSV import/export, role-based access
+(Admin / Supervisor / Contractor / View only) and password reset with optional SMS.
 
-**Start here → [SETUP.md](./SETUP.md)** for the full walkthrough: creating the Firebase
-project, enabling auth, deploying the security rules and Cloud Function, and hosting
-the file itself.
-
-## What's in this repo
+React + TypeScript + Vite front end, Firebase for sign-in, data and backend functions.
 
 | Path | What it is |
 |---|---|
-| `index.html` | The whole app — one self-contained file. Deploy it as-is to any static host. |
-| `firestore.rules` | Server-side security rules. These do the real access-control enforcement, not just the UI. |
-| `firestore.indexes.json` | Empty by default — Firestore will tell you if a query ever needs a composite index, and it goes here. |
-| `firebase.json` | Firebase CLI project config (rules path, functions source, optional Hosting config). |
-| `functions/` | The Cloud Function backing password reset, SMS, and account disable/enable — anything that needs the Admin SDK. |
-| `SETUP.md` | Full deployment guide. |
+| `src/domain/` | Business rules with no UI: stage sequence, roles, equipment model, the DNN4 hall generator, CSV. Start here. |
+| `src/lib/` | Firebase setup, data access, session store. |
+| `src/screens/`, `src/components/` | The app's screens. |
+| `firestore.rules` | Server-side security rules. These do the real access control. |
+| `functions/` | Cloud Functions for password reset, SMS and account disable/enable. |
+| `tests/` | Domain tests (`npm test`) and security-rules tests (`npm run test:rules`). |
+| `legacy/index.html` | The previous single-file app, kept for reference. |
+| `SETUP.md` | First-time Firebase setup (project, sign-in, first Admin, SMS secrets). |
 
-## Before you push this anywhere public
+## Develop
 
-`index.html` contains a Firebase **web config** (`apiKey`, `authDomain`, etc.) near the
-top — that's meant to be public and is not a secret; access is controlled entirely by
-`firestore.rules`, not by hiding this config. The things that *are* secret (Twilio
-credentials) never live in this repo at all — they're stored in Google Secret Manager
-via `firebase functions:secrets:set`, per SETUP.md.
-
-Still, if you'd rather keep the whole thing private regardless, make the GitHub repo
-**Private** when you create it — nothing here requires it to be public.
-
-## Local development
-
-There's no build step. Open `index.html` directly, or serve the folder locally:
+Needs Node.js 20 or newer, and Java 11+ for the Firebase emulators.
 
 ```
-npx serve .
+npm install
+npm test                 # domain tests
+npm run test:rules       # security rules, against the Firestore emulator
+npm run emulators        # local Firebase (auth + database) — leave running
+# in a second terminal:
+set VITE_USE_EMULATORS=1 && npm run dev     (Windows cmd)
+VITE_USE_EMULATORS=1 npm run dev            (macOS / Linux / Git Bash)
 ```
 
-Camera scanning (`getUserMedia`) requires either `https://` or `http://localhost` —
-opening the file with `file://` won't let the scanner work.
+The emulator never touches the live `trackline-prod` project.
 
-## Deploying changes
+## Release
 
-```
-firebase deploy --only firestore:rules   # after editing firestore.rules
-firebase deploy --only functions         # after editing functions/index.js
-```
+1. `npm run build` — produces the `dist/` folder.
+2. Upload the **contents** of `dist/` to the web folder on the IONOS server
+   (the same place `index.html` went before). It works from any folder, so you can
+   upload to a test folder first.
+3. Deploy the security rules and functions to the live project:
+   ```
+   npx firebase deploy --only firestore:rules --project trackline-prod
+   npx firebase deploy --only functions --project trackline-prod
+   ```
 
-Then push `index.html` (and anything else you changed) to wherever you're hosting the
-frontend — see SETUP.md step 6.
+The v0.2 rules store stages by name and add the View-only role. Deploy them together
+with the v0.2 app: the old single-file app in `legacy/` can't write under these rules.
