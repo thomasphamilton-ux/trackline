@@ -253,6 +253,24 @@
   .step-name { font-size: 14.5px; font-weight: 600; }
   .step-time { font-size: 12px; color: var(--text-dim); }
   .step.done .step-time { color: var(--good); }
+  .step.gated { cursor: default; }
+  .step:disabled, .check-row:disabled { cursor: default; opacity: 0.6; }
+
+  .check-list { display: flex; flex-direction: column; padding-left: 34px; margin-bottom: 2px; }
+  .check-row {
+    display: flex; align-items: center; gap: 10px; padding: 7px 4px; background: transparent;
+    border: none; border-bottom: 1px dashed var(--border); text-align: left; width: 100%; cursor: pointer;
+  }
+  .check-row:last-child { border-bottom: none; }
+  .check-mark { width: 16px; height: 16px; border-radius: 4px; border: 2px solid var(--border); flex: none; position: relative; }
+  .check-row.done .check-mark { border-color: var(--good); background: var(--good); }
+  .check-row.done .check-mark::after {
+    content: ""; position: absolute; left: 4px; top: 1px; width: 4px; height: 8px;
+    border-right: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(45deg);
+  }
+  .check-name { font-size: 13px; font-weight: 600; flex: 1; }
+  .check-time { font-size: 11px; color: var(--text-dim); }
+  .check-row.done .check-time { color: var(--good); }
 
   .seal-actions { display: flex; gap: 8px; margin-bottom: 12px; }
   .seals { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -504,14 +522,16 @@
     </div>
     <div id="reader"></div>
     <div class="scan-foot">
-      <div class="scan-hint">Point the camera at a QR code or barcode. It scans automatically.</div>
+      <div class="scan-hint" id="scanHint">Point the camera at a QR code or barcode. It scans automatically.</div>
       <form class="manual-row" id="manualCodeForm">
         <input id="manualCodeInput" type="text" placeholder="Or type the code here" autocomplete="off">
         <button class="btn-accent" type="submit">Use</button>
       </form>
+      <button class="btn-ghost" id="ocrCaptureBtn" type="button" data-action="ocr-capture" style="display:none;">Can't get it to scan? Take a photo instead</button>
     </div>
   </div>
 </div>
+<input type="file" id="ocrCaptureInput" accept="image/*" capture="environment" hidden>
 
 <!-- Confirm modal -->
 <div class="modal-overlay" id="confirmOverlay" hidden>
@@ -693,6 +713,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.4/html5-qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.2/tesseract.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
@@ -724,6 +745,19 @@
   }
 
   var STAGES = ["Installed", "Terminated", "EC FOD", "INT FOD", "L2's Complete", "FTE"];
+  // Stages listed here can't be marked complete directly — completion is derived from
+  // every listed check being done. Add more stage names here to gate them the same way.
+  var STAGE_CHECKS = {
+    "Terminated": ["Megger", "Point-to-point", "Torque"],
+    "EC FOD": ["Clean", "No-Tools", "No-Debris", "all Grounds tight", "Sharp Edge Protection"],
+    "INT FOD": ["Clean", "No-Tools", "No-Debris", "all Grounds tight", "Sharp Edge Protection"],
+    "L2's Complete": ["all applicable checklists complete"],
+    "FTE": ["MOP complete", "Voltage Checks", "Rotation CW"]
+  };
+  // Stages listed here can only be checked off (or un-checked) by a Supervisor or
+  // Admin — a Contractor can still see their status, just can't change it. Add more
+  // stage names here to restrict them the same way.
+  var RESTRICTED_STAGES = ["INT FOD", "FTE"];
   var FILTERS = [
     { key: "all", label: "All" },
     { key: "not-started", label: "Not started" }
@@ -849,7 +883,19 @@
     var stages = STAGES.map(function(name){
       var found = null;
       (data.stages || []).forEach(function(s){ if (s && s.name === name) found = s; });
-      return { name: name, done: !!(found && found.done), at: found ? (found.at || null) : null };
+      var required = STAGE_CHECKS[name];
+      var checks = null;
+      if (required){
+        checks = required.map(function(checkName){
+          var foundCheck = null;
+          if (found && Array.isArray(found.checks)){
+            found.checks.forEach(function(c){ if (c && c.name === checkName) foundCheck = c; });
+          }
+          return { name: checkName, done: !!(foundCheck && foundCheck.done), at: foundCheck ? (foundCheck.at || null) : null };
+        });
+      }
+      var done = checks ? checks.every(function(c){ return c.done; }) : !!(found && found.done);
+      return { name: name, done: done, at: found ? (found.at || null) : null, checks: checks };
     });
     return {
       id: id,
@@ -861,7 +907,8 @@
       optiNum: data.optiNum || "",
       createdAt: data.createdAt || Date.now(),
       stages: stages,
-      seals: Array.isArray(data.seals) ? data.seals : []
+      seals: Array.isArray(data.seals) ? data.seals : [],
+      altCodes: Array.isArray(data.altCodes) ? data.altCodes : []
     };
   }
   function normalizeProject(data, id){
@@ -1132,8 +1179,17 @@
       level: fields.level || "",
       optiNum: fields.optiNum || "",
       createdAt: Date.now(),
-      stages: STAGES.map(function(name){ return { name: name, done: false, at: null }; }),
-      seals: []
+      stages: STAGES.map(function(name){
+        var required = STAGE_CHECKS[name];
+        return {
+          name: name,
+          done: false,
+          at: null,
+          checks: required ? required.map(function(cn){ return { name: cn, done: false, at: null }; }) : null
+        };
+      }),
+      seals: [],
+      altCodes: []
     };
     writeAsset(asset);
     return asset;
@@ -1152,7 +1208,8 @@
     return found;
   }
   function toggleStage(assetId, stageName){
-    if (!canEditAssets(currentProjectId)) return;
+    if (!canEditStage(currentProjectId, stageName)) return;
+    if (STAGE_CHECKS[stageName]) return; // gated stages complete only via their checklist
     var asset = findAsset(assetId);
     if (!asset) return;
     var clone = cloneAsset(asset);
@@ -1161,8 +1218,24 @@
     });
     writeAsset(clone);
   }
+  function toggleCheck(assetId, stageName, checkName){
+    if (!canEditStage(currentProjectId, stageName)) return;
+    var asset = findAsset(assetId);
+    if (!asset) return;
+    var clone = cloneAsset(asset);
+    clone.stages.forEach(function(s){
+      if (s.name !== stageName || !Array.isArray(s.checks)) return;
+      s.checks.forEach(function(c){
+        if (c.name === checkName){ c.done = !c.done; c.at = c.done ? Date.now() : null; }
+      });
+      var allDone = s.checks.every(function(c){ return c.done; });
+      if (allDone && !s.done){ s.done = true; s.at = Date.now(); }
+      else if (!allDone && s.done){ s.done = false; s.at = null; }
+    });
+    writeAsset(clone);
+  }
   function addSeal(assetId, code){
-    if (!canEditAssets(currentProjectId)) return;
+    if (!canManageIdentifiers(currentProjectId)) return;
     var asset = findAsset(assetId);
     if (!asset || !code) return;
     var clone = cloneAsset(asset);
@@ -1179,11 +1252,44 @@
     writeAsset(clone);
   }
   function removeSeal(assetId, idx){
-    if (!canEditAssets(currentProjectId)) return;
+    if (!canManageIdentifiers(currentProjectId)) return;
     var asset = findAsset(assetId);
     if (!asset) return;
     var clone = cloneAsset(asset);
     clone.seals.splice(idx, 1);
+    writeAsset(clone);
+  }
+  function codeBelongsTo(a, code){
+    return a.id === code || a.code === code || (a.altCodes || []).indexOf(code) !== -1;
+  }
+  function assignCodeToAsset(assetId, rawCode){
+    if (!canManageIdentifiers(currentProjectId)) return;
+    var code = (rawCode || "").trim();
+    if (!code) return;
+    var conflict = null;
+    assets.forEach(function(a){ if (a.id !== assetId && codeBelongsTo(a, code)) conflict = a; });
+    if (conflict){
+      toast("That code is already assigned to " + (conflict.label || conflict.id) + ".");
+      return;
+    }
+    var asset = findAsset(assetId);
+    if (!asset) return;
+    if (codeBelongsTo(asset, code)){
+      toast("That code is already linked to this asset.");
+      return;
+    }
+    var clone = cloneAsset(asset);
+    clone.altCodes = (clone.altCodes || []).concat([code]);
+    writeAsset(clone);
+    toast("Code linked to this asset.");
+  }
+  function unlinkCode(assetId, idx){
+    if (!canManageIdentifiers(currentProjectId)) return;
+    var asset = findAsset(assetId);
+    if (!asset) return;
+    var clone = cloneAsset(asset);
+    clone.altCodes = (clone.altCodes || []).slice();
+    clone.altCodes.splice(idx, 1);
     writeAsset(clone);
   }
   var newAssetSuggestion = "";
@@ -1253,6 +1359,17 @@
   function canDeleteAssets(pid){ var r = myRoleInProject(pid); return r === "Admin" || r === "Supervisor"; }
   function canEditAssets(pid){ return myRoleInProject(pid) !== null; }
   function canManageUsers(pid){ var r = myRoleInProject(pid); return r === "Admin" || r === "Supervisor"; }
+  function canEditStage(pid, stageName){
+    if (RESTRICTED_STAGES.indexOf(stageName) !== -1){
+      var r = myRoleInProject(pid);
+      return r === "Admin" || r === "Supervisor";
+    }
+    return canEditAssets(pid);
+  }
+  function canManageIdentifiers(pid){
+    var r = myRoleInProject(pid);
+    return r === "Admin" || r === "Supervisor";
+  }
   function canManageProject(pid){ return myRoleInProject(pid) === "Admin"; }
   function visibleProjects(){
     var list = projects.slice().sort(function(a, b){ return (a.name || "").localeCompare(b.name || ""); });
@@ -1698,8 +1815,32 @@
     if (!asset){ body.innerHTML = '<div class="empty">Asset not found.</div>'; return; }
 
     var stepsHtml = asset.stages.map(function(s){
+      var stageEditable = canEditStage(currentProjectId, s.name);
+      if (Array.isArray(s.checks)){
+        var checksHtml = s.checks.map(function(c){
+          return (
+            '<button class="check-row ' + (c.done ? "done" : "") + '"' + (stageEditable ? "" : " disabled") +
+              ' data-action="toggle-check" data-id="' + escapeHtml(asset.id) + '" data-stage="' + escapeHtml(s.name) + '" data-check="' + escapeHtml(c.name) + '">' +
+              '<span class="check-mark"></span>' +
+              '<span class="check-name">' + escapeHtml(c.name) + "</span>" +
+              '<span class="check-time">' + (c.done ? formatTime(c.at) : "Not yet") + "</span>" +
+            "</button>"
+          );
+        }).join("");
+        return (
+          '<div class="step gated ' + (s.done ? "done" : "") + '">' +
+            '<span class="step-mark"></span>' +
+            '<span class="step-body">' +
+              '<span class="step-name">' + escapeHtml(s.name) + "</span>" +
+              '<span class="step-time">' + (s.done ? "Complete " + formatTime(s.at) : "Needs all checks below") + "</span>" +
+            "</span>" +
+          "</div>" +
+          '<div class="check-list">' + checksHtml + "</div>"
+        );
+      }
       return (
-        '<button class="step ' + (s.done ? "done" : "") + '" data-action="toggle-stage" data-id="' + escapeHtml(asset.id) + '" data-stage="' + escapeHtml(s.name) + '">' +
+        '<button class="step ' + (s.done ? "done" : "") + '"' + (stageEditable ? "" : " disabled") +
+          ' data-action="toggle-stage" data-id="' + escapeHtml(asset.id) + '" data-stage="' + escapeHtml(s.name) + '">' +
           '<span class="step-mark"></span>' +
           '<span class="step-body">' +
             '<span class="step-name">' + escapeHtml(s.name) + "</span>" +
@@ -1709,16 +1850,33 @@
       );
     }).join("");
 
+    var canManageIds = canManageIdentifiers(currentProjectId);
+
     var sealsHtml = asset.seals.length ? asset.seals.map(function(seal, i){
       return (
         '<li class="seal-row">' +
           '<span class="seal-code">' + escapeHtml(seal.code) + "</span>" +
           '<input class="seal-note" type="text" placeholder="Add note" value="' + escapeHtml(seal.note || "") + '" data-action="seal-note" data-id="' + escapeHtml(asset.id) + '" data-idx="' + i + '">' +
           '<span class="seal-time">' + formatTime(seal.at) + "</span>" +
-          '<button class="seal-remove" data-action="remove-seal" data-id="' + escapeHtml(asset.id) + '" data-idx="' + i + '" aria-label="Remove seal">×</button>' +
+          (canManageIds ? '<button class="seal-remove" data-action="remove-seal" data-id="' + escapeHtml(asset.id) + '" data-idx="' + i + '" aria-label="Remove seal">×</button>' : "<span></span>") +
         "</li>"
       );
     }).join("") : '<li class="empty-sm">No tamper seals logged yet.</li>';
+
+    var linkedHtml = '<li class="seal-row">' +
+        '<span class="seal-code">' + escapeHtml(asset.id) + "</span>" +
+        "<span></span>" +
+        '<span class="seal-time">Printed QR</span>' +
+        "<span></span>" +
+      "</li>" +
+      (asset.altCodes || []).map(function(code, i){
+        return '<li class="seal-row">' +
+          '<span class="seal-code">' + escapeHtml(code) + "</span>" +
+          "<span></span>" +
+          '<span class="seal-time">Linked</span>' +
+          (canManageIds ? '<button class="seal-remove" data-action="unlink-code" data-id="' + escapeHtml(asset.id) + '" data-idx="' + i + '" aria-label="Unlink code">×</button>' : "<span></span>") +
+        "</li>";
+      }).join("");
 
     body.innerHTML =
       '<div class="detail-head">' +
@@ -1736,15 +1894,21 @@
         '<button class="btn-ghost" data-action="download-qr">Save QR label</button>' +
       "</div>" +
       '<div class="detail-section">' +
+        "<h3>Linked codes</h3>" +
+        (canManageIds
+          ? '<div class="seal-actions"><button class="btn-accent" data-action="scan-link">Scan code to link</button><button class="btn-ghost" data-action="manual-link">Enter code</button></div>'
+          : "") +
+        '<ul class="seals">' + linkedHtml + "</ul>" +
+      "</div>" +
+      '<div class="detail-section">' +
         "<h3>Progress</h3>" +
         '<div class="steps">' + stepsHtml + "</div>" +
       "</div>" +
       '<div class="detail-section">' +
         "<h3>Tamper seals</h3>" +
-        '<div class="seal-actions">' +
-          '<button class="btn-accent" data-action="scan-seal">Scan seal</button>' +
-          '<button class="btn-ghost" data-action="manual-seal">Enter code</button>' +
-        "</div>" +
+        (canManageIds
+          ? '<div class="seal-actions"><button class="btn-accent" data-action="scan-seal">Scan seal</button><button class="btn-ghost" data-action="manual-seal">Enter code</button></div>'
+          : "") +
         '<ul class="seals">' + sealsHtml + "</ul>" +
       "</div>" +
       (canDeleteAssets(currentProjectId)
@@ -1869,17 +2033,66 @@
   }
 
   // ---------- scanner ----------
+  function computeScanBox(ctxType, viewfinderWidth, viewfinderHeight){
+    if (ctxType === "seal" || ctxType === "link"){
+      // Wide enough for the bar pattern, short enough to exclude the label text
+      // and packaging above/below it — a snug box beats a loose one here.
+      var w = Math.min(viewfinderWidth * 0.6, 260);
+      var h = Math.min(viewfinderHeight * 0.14, 90);
+      return { width: Math.round(w), height: Math.round(h) };
+    }
+    // QR codes are square and read reliably from a bit further back already.
+    var side = Math.min(viewfinderWidth, viewfinderHeight) * 0.7;
+    side = Math.min(side, 280);
+    return { width: Math.round(side), height: Math.round(side) };
+  }
   function openScanner(ctx){
     scanCtx = ctx;
-    document.getElementById("scanTitle").textContent = ctx.type === "add" ? "Scan asset QR code" : "Scan tamper seal";
+    var titles = { add: "Scan asset QR code", seal: "Scan tamper seal", link: "Scan code to link" };
+    var hints = {
+      add: "Point the camera at the QR code. It scans automatically.",
+      seal: "Frame just the barcode inside the box — as close as your camera can still focus.",
+      link: "Frame just the code inside the box — as close as your camera can still focus."
+    };
+    document.getElementById("scanTitle").textContent = titles[ctx.type] || "Scan code";
+    document.getElementById("scanHint").textContent = hints[ctx.type] || "Point the camera at a QR code or barcode. It scans automatically.";
+    document.getElementById("ocrCaptureBtn").style.display = (ctx.type === "seal" || ctx.type === "link") ? "" : "none";
     document.getElementById("scannerOverlay").hidden = false;
     document.getElementById("manualCodeInput").value = "";
     document.body.classList.add("no-scroll");
     try {
-      qrInstance = new Html5Qrcode("reader");
+      var scannerConfig = { verbose: false, experimentalFeatures: { useBarCodeDetectorIfSupported: true } };
+      if (typeof Html5QrcodeSupportedFormats !== "undefined"){
+        scannerConfig.formatsToSupport = [
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.CODE_93,
+          Html5QrcodeSupportedFormats.CODABAR,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION,
+          Html5QrcodeSupportedFormats.ITF,
+          Html5QrcodeSupportedFormats.RSS_14,
+          Html5QrcodeSupportedFormats.RSS_EXPANDED,
+          Html5QrcodeSupportedFormats.AZTEC,
+          Html5QrcodeSupportedFormats.DATA_MATRIX,
+          Html5QrcodeSupportedFormats.PDF_417,
+          Html5QrcodeSupportedFormats.MAXICODE
+        ];
+      }
+      qrInstance = new Html5Qrcode("reader", scannerConfig);
       qrInstance.start(
         { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 240, height: 240 } },
+        {
+          fps: 10,
+          qrbox: function(viewfinderWidth, viewfinderHeight){
+            return computeScanBox(ctx.type, viewfinderWidth, viewfinderHeight);
+          },
+          disableFlip: false
+        },
         function(decodedText){ handleScanResult(String(decodedText).trim()); },
         function(){ /* per-frame miss, ignore */ }
       ).catch(function(e){
@@ -1905,14 +2118,117 @@
     if (!code) { scanCtx = null; return; }
     if (scanCtx && scanCtx.type === "seal"){
       addSeal(scanCtx.assetId, code);
+    } else if (scanCtx && scanCtx.type === "link"){
+      assignCodeToAsset(scanCtx.assetId, code);
     } else {
       handleAssetCode(code);
     }
     scanCtx = null;
   }
+  var ocrCtx = null;
+  function openOcrCapture(){
+    ocrCtx = scanCtx; // capture before closeScanner() clears it
+    closeScanner();
+    document.getElementById("ocrCaptureInput").click();
+  }
+  function rotateImageToCanvas(imgEl, degrees){
+    var canvas = document.createElement("canvas");
+    var w = imgEl.naturalWidth || imgEl.width;
+    var h = imgEl.naturalHeight || imgEl.height;
+    if (degrees === 90 || degrees === 270){ canvas.width = h; canvas.height = w; }
+    else { canvas.width = w; canvas.height = h; }
+    var ctx2d = canvas.getContext("2d");
+    ctx2d.save();
+    if (degrees === 90){ ctx2d.translate(canvas.width, 0); ctx2d.rotate(Math.PI / 2); }
+    else if (degrees === 180){ ctx2d.translate(canvas.width, canvas.height); ctx2d.rotate(Math.PI); }
+    else if (degrees === 270){ ctx2d.translate(0, canvas.height); ctx2d.rotate(-Math.PI / 2); }
+    ctx2d.drawImage(imgEl, 0, 0, w, h);
+    ctx2d.restore();
+    return canvas;
+  }
+  function runOcr(file){
+    if (typeof Tesseract === "undefined"){
+      toast("Text recognition isn't available right now — type the code instead.");
+      return;
+    }
+    var ctx = ocrCtx;
+    var objectUrl = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function(){
+      toast("Reading photo — trying a few orientations, this can take a bit…");
+      var worker = null;
+      Tesseract.createWorker("eng").then(function(w){
+        worker = w;
+        // Without this, Tesseract assumes it's reading a full page and will
+        // try to segment the whole photo — including blank paper grain and
+        // shadows — into text blocks, often hallucinating long garbage.
+        // Telling it this is one short, isolated label fixes that.
+        return worker.setParameters({
+          tessedit_pageseg_mode: "11",
+          tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-"
+        });
+      }).then(function(){
+        var rotations = [0, 90, 270, 180];
+        var results = [];
+        function tryNext(i){
+          if (i >= rotations.length) return Promise.resolve(results);
+          var deg = rotations[i];
+          var source = deg === 0 ? img : rotateImageToCanvas(img, deg);
+          return worker.recognize(source).then(function(result){
+            var raw = (result && result.data && result.data.text) || "";
+            var conf = (result && result.data && typeof result.data.confidence === "number") ? result.data.confidence : 0;
+            var cleaned = raw.toUpperCase().replace(/[^A-Z0-9\-]/g, "").trim();
+            // A real code here is short. A long run of characters is the
+            // full-page-misread failure mode, not a plausible reading.
+            if (cleaned && cleaned.length <= 20) results.push({ text: cleaned, confidence: conf });
+          }).catch(function(err){
+            console.error(err);
+          }).then(function(){
+            return tryNext(i + 1);
+          });
+        }
+        return tryNext(0);
+      }).then(function(results){
+        return worker.terminate().then(function(){ return results; });
+      }).then(function(results){
+        URL.revokeObjectURL(objectUrl);
+        ocrCtx = null;
+        var best = null;
+        results.forEach(function(r){ if (!best || r.confidence > best.confidence) best = r; });
+        if (!best){
+          toast("Couldn't make out a short code at any angle — try again or type the code.");
+          return;
+        }
+        showPrompt({
+          title: "Confirm the code",
+          placeholder: "Edit if anything looks wrong",
+          initialValue: best.text,
+          confirmText: "Use this code",
+          onConfirm: function(val){
+            if (!ctx || !val) return;
+            if (ctx.type === "seal") addSeal(ctx.assetId, val);
+            else if (ctx.type === "link") assignCodeToAsset(ctx.assetId, val);
+            else handleAssetCode(val);
+          }
+        });
+      }).catch(function(err){
+        console.error(err);
+        URL.revokeObjectURL(objectUrl);
+        ocrCtx = null;
+        if (worker){ try { worker.terminate(); } catch (e) {} }
+        toast("Couldn't read that photo — try again or type the code.");
+      });
+    };
+    img.onerror = function(){
+      URL.revokeObjectURL(objectUrl);
+      ocrCtx = null;
+      toast("Couldn't read that photo — try again or type the code.");
+    };
+    img.src = objectUrl;
+  }
   function handleAssetCode(code){
     var existing = null;
-    assets.forEach(function(a){ if (a.id === code || a.code === code) existing = a; });
+    assets.forEach(function(a){ if (codeBelongsTo(a, code)) existing = a; });
     if (existing){
       if ((existing.projectId || "") === currentProjectId){
         openDetail(existing.id);
@@ -1954,12 +2270,12 @@
   function showPrompt(opts){
     document.getElementById("promptTitle").textContent = opts.title || "Enter code";
     var input = document.getElementById("promptInput");
-    input.value = "";
+    input.value = opts.initialValue || "";
     input.placeholder = opts.placeholder || "";
     document.getElementById("promptConfirmBtn").textContent = opts.confirmText || "Add";
     promptCallback = opts.onConfirm || null;
     document.getElementById("promptOverlay").hidden = false;
-    setTimeout(function(){ input.focus(); }, 60);
+    setTimeout(function(){ input.focus(); input.select(); }, 60);
   }
   function hidePrompt(){
     document.getElementById("promptOverlay").hidden = true;
@@ -1998,8 +2314,27 @@
       case "open": openDetail(t.getAttribute("data-id")); break;
       case "close-detail": closeDetail(); break;
       case "toggle-stage": toggleStage(t.getAttribute("data-id"), t.getAttribute("data-stage")); break;
+      case "toggle-check": toggleCheck(t.getAttribute("data-id"), t.getAttribute("data-stage"), t.getAttribute("data-check")); break;
       case "scan-add": openScanner({ type: "add" }); break;
       case "scan-seal": openScanner({ type: "seal", assetId: detailId }); break;
+      case "scan-link": openScanner({ type: "link", assetId: detailId }); break;
+      case "manual-link":
+        showPrompt({
+          title: "Enter code to link",
+          placeholder: "Scanned QR or barcode value",
+          confirmText: "Link code",
+          onConfirm: function(val){ assignCodeToAsset(detailId, val); }
+        });
+        break;
+      case "unlink-code":
+        showConfirm({
+          title: "Unlink code",
+          message: "This code will no longer open this asset when scanned.",
+          confirmText: "Unlink",
+          danger: true,
+          onConfirm: (function(id, idx){ return function(){ unlinkCode(id, idx); }; })(t.getAttribute("data-id"), +t.getAttribute("data-idx"))
+        });
+        break;
       case "manual-seal":
         showPrompt({
           title: "Enter tamper seal code",
@@ -2028,6 +2363,7 @@
         break;
       case "download-qr": downloadQr(); break;
       case "close-scanner": closeScanner(); scanCtx = null; break;
+      case "ocr-capture": openOcrCapture(); break;
       case "export-csv": exportCsv(); break;
       case "open-import": openImportModal(); break;
       case "close-import": closeImportModal(); break;
@@ -2081,6 +2417,11 @@
     e.preventDefault();
     var val = document.getElementById("manualCodeInput").value.trim();
     if (val) handleScanResult(val);
+  });
+  document.getElementById("ocrCaptureInput").addEventListener("change", function(e){
+    var file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (file) runOcr(file);
   });
 
   document.getElementById("promptForm").addEventListener("submit", function(e){
